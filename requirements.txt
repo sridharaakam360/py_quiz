@@ -1,0 +1,42 @@
+# Core Framework
+Flask==2.3.2
+Werkzeug==2.3.6
+python-dotenv==1.0.0
+gunicorn==20.1.0
+
+# Database
+mysql-connector-python==8.0.33
+redis==5.0.3
+
+# Authentication & Security
+bcrypt==4.0.1
+Flask-WTF==1.1.1
+Flask-Login==0.6.2
+bleach==6.0.0
+itsdangerous==2.1.2
+
+# Rate Limiting & Caching
+Flask-Limiter==3.5.1
+Flask-Caching==2.1.0
+limits==3.6.0
+
+# Real-time Features
+Flask-SocketIO==5.3.4
+eventlet==0.33.3
+python-engineio==4.5.1
+python-socketio==5.8.0
+
+# PDF Generation
+reportlab==4.0.8
+Pillow==10.0.0
+
+# Data Processing & Utilities
+pandas==2.0.3
+pytz==2023.3
+Markdown==3.4.3
+PyYAML==6.0.1
+
+# Testing & Development (optional)
+pytest==7.4.0
+pytest-flask==1.2.0
+coverage==7.2.7

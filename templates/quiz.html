@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Pharmacy Quiz</h2>
+            <div id="timer" class="hidden text-lg font-semibold text-indigo-600 dark:text-indigo-400 px-4 py-1 bg-indigo-100 dark:bg-indigo-900 rounded-full">00:00</div>
+        </div>
+        
+        <div class="filter-form bg-gray-50 dark:bg-gray-750 p-4 rounded-lg shadow-inner">
+            <form method="POST" class="space-y-4 md:space-y-0 md:flex md:flex-wrap md:gap-4 md:items-end">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Quiz Type</label>
+                    <select name="quiz_type" onchange="this.form.submit()" class="w-full md:w-40 dark:bg-gray-700">
+                        <option value="previous_year" {% if quiz_type == 'previous_year' %}selected{% endif %}>Previous Year</option>
+                        <option value="subject_wise" {% if quiz_type == 'subject_wise' %}selected{% endif %}>Subject-wise</option>
+                    </select>
+                </div>
+                
+                {% if quiz_type == 'previous_year' %}
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Exam</label>
+                        <select name="exam_name" class="w-full md:w-40 dark:bg-gray-700">
+                            <option value="">All Exams</option>
+                            {% for exam in exam_names %}
+                                <option value="{{ exam }}" {% if filters.exam_name == exam %}selected{% endif %}>{{ exam }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Year</label>
+                        <select name="year" class="w-full md:w-28 dark:bg-gray-700">
+                            <option value="">All Years</option>
+                            {% for year in years %}
+                                <option value="{{ year }}" {% if filters.year == year|string %}selected{% endif %}>{{ year }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                {% else %}
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Subject</label>
+                        <select name="subject" class="w-full md:w-40 dark:bg-gray-700">
+                            <option value="">All Subjects</option>
+                            {% for subject in subjects %}
+                                <option value="{{ subject }}" {% if filters.subject == subject %}selected{% endif %}>{{ subject }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Topics</label>
+                        <input type="text" name="topics" placeholder="Topics (comma-separated)" value="{{ filters.topics if filters.topics else '' }}" class="w-full md:w-60 dark:bg-gray-700">
+                    </div>
+                {% endif %}
+                
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Difficulty</label>
+                    <select name="difficulty" class="w-full md:w-32 dark:bg-gray-700">
+                        <option value="">Any</option>
+                        <option value="easy" {% if request.form.get('difficulty') == 'easy' %}selected{% endif %}>Easy</option>
+                        <option value="medium" {% if request.form.get('difficulty') == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="hard" {% if request.form.get('difficulty') == 'hard' %}selected{% endif %}>Hard</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-2 md:ml-auto">
+                    <button type="submit" name="filter" value="filter" class="btn-secondary flex-grow md:flex-grow-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+                        </svg>
+                        Filter
+                    </button>
+                    
+                    <button type="submit" name="generate" value="generate" class="btn flex-grow md:flex-grow-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
+                        </svg>
+                        Generate Quiz
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if questions %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
+            <form method="POST" class="quiz-form" onsubmit="return confirm('Are you sure you want to submit the quiz?');">
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-2">Quiz Questions</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Answer all questions and click Submit to see your results.</p>
+                </div>
+                
+                {% for q in questions %}
+                    <div class="question bg-gray-50 dark:bg-gray-750 p-4 rounded-lg mb-6 shadow-md hover:shadow-lg transition-all duration-300">
+                        <p class="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">
+                            {{ loop.index }}. {{ q.question }}
+                        </p>
+                        
+                        <div class="text-sm text-gray-600 dark:text-gray-400 mb-3 flex flex-wrap gap-2">
+                            <span class="bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded-full">{{ q.exam_name }}</span>
+                            <span class="bg-green-100 dark:bg-green-900 px-2 py-1 rounded-full">{{ q.subject }}</span>
+                            <span class="bg-yellow-100 dark:bg-yellow-900 px-2 py-1 rounded-full">{{ q.year }}</span>
+                            <span class="bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded-full capitalize">
+                                {{ q.difficulty }}
+                            </span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <label class="flex items-start p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                                <input type="radio" name="question_{{ q.id }}" value="a" required class="mt-0.5 mr-3">
+                                <span>A. {{ q.option_a }}</span>
+                            </label>
+                            
+                            <label class="flex items-start p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                                <input type="radio" name="question_{{ q.id }}" value="b" class="mt-0.5 mr-3">
+                                <span>B. {{ q.option_b }}</span>
+                            </label>
+                            
+                            <label class="flex items-start p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                                <input type="radio" name="question_{{ q.id }}" value="c" class="mt-0.5 mr-3">
+                                <span>C. {{ q.option_c }}</span>
+                            </label>
+                            
+                            <label class="flex items-start p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-white dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                                <input type="radio" name="question_{{ q.id }}" value="d" class="mt-0.5 mr-3">
+                                <span>D. {{ q.option_d }}</span>
+                            </label>
+                        </div>
+                    </div>
+                {% endfor %}
+                
+                <div class="flex justify-between items-center">
+                    <p class="text-gray-600 dark:text-gray-400">Total questions: {{ questions|length }}</p>
+                    <button type="submit" class="btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        Submit Quiz
+                    </button>
+                </div>
+            </form>
+        </div>
+    {% else %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 text-center animate-fade-in">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">No questions available. Click 'Generate Quiz' to fetch questions.</p>
+            <p class="text-gray-500 dark:text-gray-500">Try adjusting your filters or generating a new quiz.</p>
+        </div>
+    {% endif %}
+    
+    <div class="mt-6">
+        <a href="{{ url_for('user_dashboard') }}" class="btn-secondary inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

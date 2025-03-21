@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-screen-minus-nav">
+    <div class="max-w-md w-full text-center">
+        <div class="mb-8">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        
+        <h2 class="text-4xl font-bold text-gray-800 dark:text-white mb-4">500 - Internal Server Error</h2>
+        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">Something went wrong on our end. Please try again later.</p>
+        
+        <div class="space-y-4">
+            <a href="{{ url_for('index') }}" class="btn inline-flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                </svg>
+                Back to Home
+            </a>
+            
+            <p class="text-gray-500 dark:text-gray-500 text-sm">
+                The error has been logged and we'll investigate the issue.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

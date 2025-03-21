@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Edit User</h2>
+<form method="POST" class="space-y-4 animate-fade-in">
+    <input type="text" name="username" placeholder="Username" value="{{ form.username.data }}" required>
+    <select name="role" required>
+        <option value="user" {% if form.role.data == 'user' %}selected{% endif %}>User</option>
+        <option value="admin" {% if form.role.data == 'admin' %}selected{% endif %}>Admin</option>
+    </select>
+    <select name="status" required>
+        <option value="active" {% if form.status.data == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if form.status.data == 'inactive' %}selected{% endif %}>Inactive</option>
+    </select>
+    <input type="password" name="password" placeholder="New Password (leave blank to keep unchanged)">
+    <input type="submit" value="Update User" class="w-full">
+</form>
+<a href="{{ url_for('manage_users') }}" class="btn inline-block mt-4">Back to Users</a>
+{% endblock %}

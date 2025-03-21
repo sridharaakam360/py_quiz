@@ -1,0 +1,73 @@
+2025-03-20 21:00:42,055 - __main__ - INFO - Database initialization completed (admin check).
+2025-03-20 21:08:28,571 - __main__ - INFO - Database initialization completed (admin check).
+2025-03-21 15:40:17,258 - __main__ - INFO - Database initialized successfully
+2025-03-21 15:40:17,260 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 15:40:18,477 - __main__ - INFO - Database initialized successfully
+2025-03-21 15:40:18,482 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 15:40:18,484 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 15:42:17,121 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy - Copy\\app.py', reloading
+2025-03-21 15:42:17,286 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 15:42:18,663 - __main__ - INFO - Database initialized successfully
+2025-03-21 15:42:18,663 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 15:42:18,666 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 15:44:00,910 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy - Copy\\app.py', reloading
+2025-03-21 15:44:01,113 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 15:44:02,641 - __main__ - INFO - Database initialized successfully
+2025-03-21 15:44:02,641 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 15:44:02,650 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 15:44:22,366 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-21 15:44:22,368 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-21 15:44:22,372 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-21 15:44:24,676 - __main__ - INFO - User admin logged in successfully
+2025-03-21 15:49:07,315 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy - Copy\\app.py', reloading
+2025-03-21 15:49:07,490 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 15:49:08,737 - __main__ - INFO - Database initialized successfully
+2025-03-21 15:49:08,739 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 15:49:08,743 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 15:49:12,693 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-21 15:49:12,699 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-21 15:49:12,699 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-21 15:50:28,264 - __main__ - INFO - User admin logged out
+2025-03-21 15:50:39,118 - __main__ - INFO - New user registered: pytestuser1
+2025-03-21 15:50:45,580 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-21 17:00:29,248 - flask_wtf.csrf - INFO - The CSRF session token is missing.
+2025-03-21 17:06:02,757 - flask_wtf.csrf - INFO - The CSRF session token is missing.
+2025-03-21 17:06:11,541 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-21 17:09:27,584 - __main__ - INFO - Quiz completed by pytestuser1, score: 1/3
+2025-03-21 17:10:31,662 - __main__ - INFO - User pytestuser1 logged out
+2025-03-21 17:10:43,316 - __main__ - INFO - User admin logged in successfully
+2025-03-21 17:12:13,193 - __main__ - INFO - New question added by admin admin
+2025-03-21 17:13:22,035 - __main__ - INFO - User 2 updated by admin admin
+2025-03-21 17:14:21,281 - __main__ - INFO - User admin logged out
+2025-03-21 17:14:25,569 - __main__ - INFO - User pytestuser2 logged in successfully
+2025-03-21 17:17:23,222 - __main__ - INFO - Quiz completed by pytestuser2, score: 1/1
+2025-03-21 17:17:55,015 - __main__ - INFO - User pytestuser2 logged out
+2025-03-21 17:18:00,006 - __main__ - INFO - User admin logged in successfully
+2025-03-21 17:31:49,424 - __main__ - INFO - Question 11 deleted by admin admin
+2025-03-21 17:32:50,201 - __main__ - INFO - User 2 updated by admin admin
+2025-03-21 17:33:36,441 - __main__ - INFO - User 2 deleted by admin admin
+2025-03-21 17:37:21,076 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy - Copy\\app.py', reloading
+2025-03-21 17:37:21,281 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 17:39:59,259 - __main__ - INFO - Database initialized successfully
+2025-03-21 17:39:59,260 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 17:40:00,387 - __main__ - INFO - Database initialized successfully
+2025-03-21 17:40:00,388 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 17:40:00,390 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 17:40:06,956 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-21 17:40:06,956 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-21 17:40:06,964 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-21 17:44:20,879 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy - Copy\\app.py', reloading
+2025-03-21 17:44:21,195 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 17:44:22,361 - __main__ - INFO - Database initialized successfully
+2025-03-21 17:44:22,361 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 17:44:22,361 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 17:44:28,039 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-21 17:44:28,039 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-21 17:44:28,039 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-21 17:45:14,716 - __main__ - INFO - User 3 updated by admin admin
+2025-03-21 17:45:19,714 - __main__ - INFO - User 3 deleted by admin admin
+2025-03-21 17:46:47,490 - __main__ - INFO - User admin logged out
+2025-03-21 17:46:52,343 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-21 17:47:21,825 - __main__ - INFO - Quiz completed by pytestuser1, score: 2/3
+2025-03-21 17:47:37,986 - __main__ - INFO - User pytestuser1 logged out
+2025-03-21 17:47:40,850 - __main__ - INFO - User pytestuser1 logged in successfully

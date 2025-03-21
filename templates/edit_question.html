@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>Edit Question</h2>
+    <form method="POST" class="question-form space-y-4 animate-fade-in">
+        <textarea name="question" placeholder="Question" required>{{ form.question.data }}</textarea>
+        <input type="text" name="option_a" placeholder="Option A" value="{{ form.option_a.data }}" required>
+        <input type="text" name="option_b" placeholder="Option B" value="{{ form.option_b.data }}" required>
+        <input type="text" name="option_c" placeholder="Option C" value="{{ form.option_c.data }}" required>
+        <input type="text" name="option_d" placeholder="Option D" value="{{ form.option_d.data }}" required>
+        <select name="correct_answer" required>
+            <option value="a" {% if form.correct_answer.data == 'a' %}selected{% endif %}>A</option>
+            <option value="b" {% if form.correct_answer.data == 'b' %}selected{% endif %}>B</option>
+            <option value="c" {% if form.correct_answer.data == 'c' %}selected{% endif %}>C</option>
+            <option value="d" {% if form.correct_answer.data == 'd' %}selected{% endif %}>D</option>
+        </select>
+        <input type="text" name="category" placeholder="Category" value="{{ form.category.data }}" required>
+        <select name="difficulty" required>
+            <option value="easy" {% if form.difficulty.data == 'easy' %}selected{% endif %}>Easy</option>
+            <option value="medium" {% if form.difficulty.data == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="hard" {% if form.difficulty.data == 'hard' %}selected{% endif %}>Hard</option>
+        </select>
+        <input type="text" name="exam_name" placeholder="Exam Name" value="{{ form.exam_name.data }}" required>
+        <input type="text" name="subject" placeholder="Subject" value="{{ form.subject.data }}" required>
+        <input type="text" name="topics" placeholder="Topics (comma-separated)" value="{{ form.topics.data }}" required>
+        <input type="number" name="year" placeholder="Year" value="{{ form.year.data }}" required>
+        <textarea name="explanation" placeholder="Explanation" required>{{ form.explanation.data }}</textarea>
+        <input type="submit" value="Update Question" class="w-full">
+    </form>
+    <a href="{{ url_for('manage_questions') }}" class="btn inline-block mt-4">Back to Questions</a>
+{% endblock %}
