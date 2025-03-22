@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Manage Students</h1>
+  
+  <h2>Add New Student</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    {{ form.username.label }} {{ form.username() }}<br>
+    {{ form.email.label }} {{ form.email() }}<br>
+    {{ form.password.label }} {{ form.password() }}<br>
+    {{ form.submit() }}
+  </form>
+  
+  <h2>Student List ({{ student_count }}/{{ institution.user_limit }})</h2>
+  <p>Remaining Slots: {{ remaining_slots }}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Quizzes Taken</th>
+        <th>Average Score</th>
+        <th>Last Active</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for student in students %}
+        <tr>
+          <td>{{ student.username }}</td>
+          <td>{{ student.email }}</td>
+          <td>{{ student.quiz_count }}</td>
+          <td>{{ student.avg_score }}</td>
+          <td>{{ student.last_active_str }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('remove_student', student_id=student.id) }}">
+              <button type="submit">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -146,3 +146,53 @@
 2025-03-22 10:10:15,118 - __main__ - INFO - Institution admin admin@abc logged in
 2025-03-22 10:13:41,678 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
 2025-03-22 10:13:41,841 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:13:43,087 - __main__ - INFO - Database initialized successfully
+2025-03-22 10:13:43,087 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:13:43,094 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:13:47,675 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 10:13:47,675 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 10:13:47,675 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 10:14:37,901 - __main__ - INFO - New student student1 added to institution ABC INSTITUTE
+2025-03-22 10:16:37,345 - __main__ - INFO - Institution student student1 logged in
+2025-03-22 10:16:59,357 - __main__ - INFO - Quiz completed by student1, score: 0/2
+2025-03-22 10:17:13,584 - __main__ - INFO - User student1 logged out
+2025-03-22 10:18:41,184 - __main__ - INFO - Institution admin admin@abc logged in
+2025-03-22 10:26:03,462 - __main__ - INFO - User admin@abc logged out
+2025-03-22 10:26:11,190 - __main__ - INFO - User student1 logged in successfully
+2025-03-22 10:44:52,685 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 10:44:52,840 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:44:54,263 - __main__ - ERROR - Database initialization error: 1265 (01000): Data truncated for column 'role' at row 1
+2025-03-22 10:44:54,263 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:44:54,266 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:45:03,223 - __main__ - ERROR - Database initialization error: 1265 (01000): Data truncated for column 'role' at row 1
+2025-03-22 10:45:03,223 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:45:04,605 - __main__ - ERROR - Database initialization error: 1265 (01000): Data truncated for column 'role' at row 1
+2025-03-22 10:45:04,606 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:45:04,610 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:45:11,817 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 10:45:11,817 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 10:45:11,819 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 10:45:34,823 - __main__ - INFO - User student1 logged out
+2025-03-22 10:46:36,481 - __main__ - INFO - Institution student student1 logged in
+2025-03-22 10:46:54,617 - __main__ - INFO - User student1 logged out
+2025-03-22 10:47:06,611 - __main__ - INFO - Institution admin admin@abc logged in
+2025-03-22 10:55:50,152 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 10:55:50,313 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:55:52,373 - __main__ - ERROR - Database initialization error: 1265 (01000): Data truncated for column 'role' at row 1
+2025-03-22 10:55:52,373 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:55:52,381 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:57:12,702 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 10:57:12,702 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 10:57:12,718 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 11:02:18,808 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 11:02:18,964 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 11:02:20,506 - __main__ - ERROR - Database initialization error: 1265 (01000): Data truncated for column 'role' at row 1
+2025-03-22 11:02:20,506 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 11:02:20,513 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 11:03:08,710 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 11:03:08,711 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 11:03:08,711 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 11:17:24,284 - __main__ - INFO - User admin@abc logged out
+2025-03-22 11:17:38,315 - __main__ - INFO - User admin@abc logged in successfully
+2025-03-22 11:18:05,749 - __main__ - INFO - User admin@abc logged out
+2025-03-22 11:28:48,899 - __main__ - INFO - User admin logged in successfully

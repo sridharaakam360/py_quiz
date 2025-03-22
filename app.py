@@ -25,14 +25,11 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
-
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
-
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
-
 
 # Setup logging
 logging.basicConfig(
@@ -95,16 +92,47 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('login'))
+            return redirect(url_for('choose_login'))
         return f(*args, **kwargs)
     return decorated_function
 
-def admin_required(f):
+# For super_admin only routes (full access to everything)
+def super_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session or session.get('role') != 'admin':
+        if 'username' not in session or session.get('role') != 'super_admin':
+            flash('Super admin privileges required.', 'danger')
+            return redirect(url_for('choose_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# For institute_admin only routes (student management but not question management)
+def institute_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session or session.get('role') != 'institute_admin':
+            flash('Institute admin privileges required.', 'danger')
+            return redirect(url_for('choose_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# For individual_user or student_user (quiz access only)
+def quiz_access_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session or session.get('role') not in ['individual_user', 'student_user', 'institute_admin', 'super_admin']:
+            flash('Please log in to access quizzes.', 'danger')
+            return redirect(url_for('choose_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# For any type of admin access (institute_admin OR super_admin)
+def any_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session or session.get('role') not in ['institute_admin', 'super_admin']:
             flash('Admin privileges required.', 'danger')
-            return redirect(url_for('login'))
+            return redirect(url_for('choose_login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -137,12 +165,10 @@ class QuestionForm(FlaskForm):
 
 class UserForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
-    role = SelectField('Role', choices=[('user', 'User'), ('admin', 'Admin')], validators=[DataRequired()])
+    role = SelectField('Role', choices=[('individual_user', 'Individual User'), ('student_user', 'Student User'), ('institute_admin', 'Institute Admin'), ('super_admin', 'Super Admin')], validators=[DataRequired()])
     status = SelectField('Status', choices=[('active', 'Active'), ('inactive', 'Inactive')], validators=[DataRequired()])
     password = PasswordField('New Password (leave blank to keep unchanged)', validators=[Length(min=0, max=50)])
     submit = SubmitField('Update User')
-
-# Add new forms to the app.py file:
 
 class InstitutionRegisterForm(FlaskForm):
     institution_name = StringField('Institution Name', validators=[DataRequired(), Length(min=3, max=255)])
@@ -192,88 +218,78 @@ def init_db():
         cursor.execute("CREATE DATABASE IF NOT EXISTS pharmacy_exam")
         cursor.execute("USE pharmacy_exam")
         
-        # Create tables with proper indexing
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                role ENUM('user', 'admin') DEFAULT 'user',
-                status ENUM('active', 'inactive') DEFAULT 'active',
-                last_active DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_username (username),
-                INDEX idx_role (role),
-                INDEX idx_status (status),
-                INDEX idx_last_active (last_active)
-            )
-        ''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password VARCHAR(255) NOT NULL,
+            role ENUM('individual_user', 'student_user', 'institute_admin', 'super_admin') DEFAULT 'individual_user',
+            status ENUM('active', 'inactive') DEFAULT 'active',
+            last_active DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_username (username),
+            INDEX idx_role (role),
+            INDEX idx_status (status),
+            INDEX idx_last_active (last_active)
+        )''')
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS questions (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                question TEXT NOT NULL,
-                option_a VARCHAR(100) NOT NULL,
-                option_b VARCHAR(100) NOT NULL,
-                option_c VARCHAR(100) NOT NULL,
-                option_d VARCHAR(100) NOT NULL,
-                correct_answer CHAR(1) NOT NULL,
-                category VARCHAR(50) NOT NULL,
-                difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
-                exam_name VARCHAR(100) NOT NULL,
-                subject VARCHAR(100) NOT NULL,
-                topics VARCHAR(255) NOT NULL,
-                year INT NOT NULL,
-                explanation TEXT NOT NULL,
-                created_by INT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-                INDEX idx_exam_year (exam_name, year),
-                INDEX idx_subject (subject),
-                INDEX idx_difficulty (difficulty),
-                INDEX idx_category (category),
-                INDEX idx_created_at (created_at)
-            )
-        ''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS questions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            question TEXT NOT NULL,
+            option_a VARCHAR(100) NOT NULL,
+            option_b VARCHAR(100) NOT NULL,
+            option_c VARCHAR(100) NOT NULL,
+            option_d VARCHAR(100) NOT NULL,
+            correct_answer CHAR(1) NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+            exam_name VARCHAR(100) NOT NULL,
+            subject VARCHAR(100) NOT NULL,
+            topics VARCHAR(255) NOT NULL,
+            year INT NOT NULL,
+            explanation TEXT NOT NULL,
+            created_by INT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+            INDEX idx_exam_year (exam_name, year),
+            INDEX idx_subject (subject),
+            INDEX idx_difficulty (difficulty),
+            INDEX idx_category (category),
+            INDEX idx_created_at (created_at)
+        )''')
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS results (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                score INT NOT NULL,
-                total_questions INT NOT NULL,
-                time_taken INT NOT NULL,
-                answers JSON,
-                date_taken DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_user_id (user_id),
-                INDEX idx_date_taken (date_taken)
-            )
-        ''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS results (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            score INT NOT NULL,
+            total_questions INT NOT NULL,
+            time_taken INT NOT NULL,
+            answers JSON,
+            date_taken DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_user_id (user_id),
+            INDEX idx_date_taken (date_taken)
+        )''')
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS question_reviews (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                question_id INT NOT NULL,
-                user_id INT NOT NULL,
-                comment TEXT,
-                rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_question_id (question_id),
-                INDEX idx_user_id (user_id),
-                INDEX idx_rating (rating)
-            )
-        ''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS question_reviews (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            question_id INT NOT NULL,
+            user_id INT NOT NULL,
+            comment TEXT,
+            rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_question_id (question_id),
+            INDEX idx_user_id (user_id),
+            INDEX idx_rating (rating)
+        )''')
         
-        # Create admin user if it doesn't exist
-        cursor.execute('SELECT COUNT(*) FROM users WHERE role = "admin"')
+        cursor.execute('SELECT COUNT(*) FROM users WHERE role = "super_admin"')
         if cursor.fetchone()[0] == 0:
             admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
             cursor.execute('INSERT INTO users (username, password, role, status) VALUES (%s, %s, %s, %s)',
-                          ('admin', generate_password_hash(admin_password), 'admin', 'active'))
-            logger.info("Admin user created successfully")
+                          ('superadmin', generate_password_hash(admin_password), 'super_admin', 'active'))
+            logger.info("Super admin user created successfully")
         
         conn.commit()
         logger.info("Database initialized successfully")
@@ -288,13 +304,13 @@ def init_db():
 @app.route('/')
 def index():
     if 'username' in session:
-        if session['role'] == 'admin':
+        if session['role'] == 'super_admin':
             return redirect(url_for('admin_dashboard'))
+        elif session['role'] == 'institute_admin':
+            return redirect(url_for('institution_dashboard'))
         else:
             return redirect(url_for('user_dashboard'))
-    return redirect(url_for('login'))
-
-# Add these routes to app.py:
+    return redirect(url_for('choose_login'))
 
 @app.route('/choose_login', methods=['GET', 'POST'])
 def choose_login():
@@ -313,7 +329,6 @@ def choose_login():
 def register_institution():
     form = InstitutionRegisterForm()
     
-    # Get plans for dropdown
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute('SELECT id, name, price, max_users FROM subscription_plans WHERE is_institution = TRUE')
@@ -328,69 +343,56 @@ def register_institution():
         password = form.password.data
         plan_id = form.subscription_plan.data
         
-        # Get the selected plan
         cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (plan_id,))
         plan = cursor.fetchone()
         if not plan:
             flash('Invalid subscription plan selected.', 'danger')
             return redirect(url_for('register_institution'))
         
-        # Generate a unique institution code
         import random
         import string
         institution_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         
         try:
-            # Check if username already exists
             cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
             if cursor.fetchone():
                 flash('Username already exists. Please choose a different one.', 'danger')
                 return render_template('register_institution.html', form=form)
             
-            # Start a transaction (only if one isn't already in progress)
             if not conn.in_transaction:
                 conn.start_transaction()
             
-            # Create the admin user
             hashed_password = generate_password_hash(password)
-            cursor.execute('''
-                INSERT INTO users 
+            cursor.execute('''INSERT INTO users 
                 (username, email, password, role, status, user_type, last_active) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ''', (username, email, hashed_password, 'admin', 'active', 'institution_admin', datetime.now()))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)''',
+                (username, email, hashed_password, 'institute_admin', 'active', 'institution_admin', datetime.now()))
             admin_id = cursor.lastrowid
             
-            # Calculate subscription end date
             start_date = datetime.now()
             end_date = start_date + timedelta(days=plan['duration_days'])
             
-            # Create the institution
-            cursor.execute('''
-                INSERT INTO institutions
+            cursor.execute('''INSERT INTO institutions
                 (name, admin_id, subscription_plan_id, user_limit, subscription_start, subscription_end, status, institution_code)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (institution_name, admin_id, plan_id, plan['max_users'], start_date, end_date, 'active', institution_code))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+                (institution_name, admin_id, plan_id, plan['max_users'], start_date, end_date, 'active', institution_code))
             institution_id = cursor.lastrowid
             
-            # Update the admin user with institution_id
-            cursor.execute('''
-                UPDATE users
+            cursor.execute('''UPDATE users
                 SET institution_id = %s,
                     subscription_plan_id = %s,
                     subscription_start = %s,
                     subscription_end = %s
-                WHERE id = %s
-            ''', (institution_id, plan_id, start_date, end_date, admin_id))
+                WHERE id = %s''',
+                (institution_id, plan_id, start_date, end_date, admin_id))
             
-            # Add to subscription history
-            cursor.execute('''
-                INSERT INTO subscription_history
+            cursor.execute('''INSERT INTO subscription_history
                 (institution_id, subscription_plan_id, start_date, end_date)
-                VALUES (%s, %s, %s, %s)
-            ''', (institution_id, plan_id, start_date, end_date))
+                VALUES (%s, %s, %s, %s)''',
+                (institution_id, plan_id, start_date, end_date))
             
             conn.commit()
-            flash(f'Institution registered successfully! Your institution code is: {institution_code}. Please save this code for your students to join.', 'success')
+            flash(f'Institution registered successfully! Your institution code is: {institution_code}.', 'success')
             logger.info(f"New institution registered: {institution_name}")
             return redirect(url_for('login'))
             
@@ -398,7 +400,7 @@ def register_institution():
             if conn.in_transaction:
                 conn.rollback()
             logger.error(f"Database error during institution registration: {str(err)}")
-            flash('An error occurred during registration. Please try again.', 'danger')
+            flash('An error occurred during registration.', 'danger')
     
     return render_template('register_institution.html', form=form)
 
@@ -414,28 +416,25 @@ def institution_login():
         cursor = conn.cursor(dictionary=True)
         
         try:
-            # Find the institution
             cursor.execute('SELECT * FROM institutions WHERE institution_code = %s', (institution_code,))
             institution = cursor.fetchone()
             
             if not institution:
-                flash('Institution not found. Please check your institution code.', 'danger')
+                flash('Institution not found.', 'danger')
                 return render_template('institution_login.html', form=form)
             
-            # Find the user
-            cursor.execute('''
-                SELECT * FROM users 
+            cursor.execute('''SELECT * FROM users 
                 WHERE username = %s 
                 AND institution_id = %s 
-                AND user_type = 'institution_admin'
-            ''', (username, institution['id']))
+                AND user_type = 'institution_admin' ''',
+                (username, institution['id']))
             user = cursor.fetchone()
             
             if user and check_password_hash(user['password'], password) and user['status'] == 'active':
                 session.clear()
                 session['user_id'] = user['id']
                 session['username'] = user['username']
-                session['role'] = user['role']
+                session['role'] = 'institute_admin'
                 session['user_type'] = user['user_type']
                 session['institution_id'] = institution['id']
                 session['institution_name'] = institution['name']
@@ -451,7 +450,7 @@ def institution_login():
                 flash('Invalid credentials or inactive account', 'danger')
         except mysql.connector.Error as err:
             logger.error(f"Database error during institution login: {str(err)}")
-            flash('An error occurred during login. Please try again.', 'danger')
+            flash('An error occurred during login.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -470,28 +469,25 @@ def student_login():
         cursor = conn.cursor(dictionary=True)
         
         try:
-            # Find the institution
             cursor.execute('SELECT * FROM institutions WHERE institution_code = %s', (institution_code,))
             institution = cursor.fetchone()
             
             if not institution:
-                flash('Institution not found. Please check your institution code.', 'danger')
+                flash('Institution not found.', 'danger')
                 return render_template('student_login.html', form=form)
             
-            # Find the user
-            cursor.execute('''
-                SELECT * FROM users 
+            cursor.execute('''SELECT * FROM users 
                 WHERE username = %s 
                 AND institution_id = %s 
-                AND user_type = 'institution_student'
-            ''', (username, institution['id']))
+                AND user_type = 'institution_student' ''',
+                (username, institution['id']))
             user = cursor.fetchone()
             
             if user and check_password_hash(user['password'], password) and user['status'] == 'active':
                 session.clear()
                 session['user_id'] = user['id']
                 session['username'] = user['username']
-                session['role'] = 'user'  # Students have user role
+                session['role'] = 'student_user'
                 session['user_type'] = user['user_type']
                 session['institution_id'] = institution['id']
                 session['institution_name'] = institution['name']
@@ -507,7 +503,7 @@ def student_login():
                 flash('Invalid credentials or inactive account', 'danger')
         except mysql.connector.Error as err:
             logger.error(f"Database error during student login: {str(err)}")
-            flash('An error occurred during login. Please try again.', 'danger')
+            flash('An error occurred during login.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -527,35 +523,30 @@ def register_student():
         cursor = conn.cursor(dictionary=True)
         
         try:
-            # Find the institution
             cursor.execute('SELECT * FROM institutions WHERE institution_code = %s AND status = "active"', (institution_code,))
             institution = cursor.fetchone()
             
             if not institution:
-                flash('Institution not found or not active. Please check your institution code.', 'danger')
+                flash('Institution not found or not active.', 'danger')
                 return render_template('register_student.html', form=form)
             
-            # Check if the institution has reached its user limit
             cursor.execute('SELECT COUNT(*) as student_count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution['id'],))
             student_count = cursor.fetchone()['student_count']
             
             if student_count >= institution['user_limit']:
-                flash('This institution has reached its student limit. Please contact your institution administrator.', 'danger')
+                flash('Institution has reached its student limit.', 'danger')
                 return render_template('register_student.html', form=form)
             
-            # Check if username already exists
             cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
             if cursor.fetchone():
-                flash('Username already exists. Please choose a different one.', 'danger')
+                flash('Username already exists.', 'danger')
                 return render_template('register_student.html', form=form)
             
-            # Create the student user
             hashed_password = generate_password_hash(password)
-            cursor.execute('''
-                INSERT INTO users 
+            cursor.execute('''INSERT INTO users 
                 (username, email, password, role, status, user_type, institution_id, last_active) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (username, email, hashed_password, 'user', 'active', 'institution_student', institution['id'], datetime.now()))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+                (username, email, hashed_password, 'student_user', 'active', 'institution_student', institution['id'], datetime.now()))
             
             conn.commit()
             flash('Registration successful! You can now log in as a student.', 'success')
@@ -565,7 +556,7 @@ def register_student():
         except mysql.connector.Error as err:
             conn.rollback()
             logger.error(f"Database error during student registration: {str(err)}")
-            flash('An error occurred during registration. Please try again.', 'danger')
+            flash('An error occurred during registration.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -573,12 +564,8 @@ def register_student():
     return render_template('register_student.html', form=form)
 
 @app.route('/institution_dashboard')
-@login_required
+@institute_admin_required
 def institution_dashboard():
-    if session.get('user_type') != 'institution_admin':
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('index'))
-    
     institution_id = session.get('institution_id')
     if not institution_id:
         flash('Institution not found.', 'danger')
@@ -588,54 +575,43 @@ def institution_dashboard():
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Get institution info
         cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
         institution = cursor.fetchone()
         
-        # Get subscription plan info
         cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (institution['subscription_plan_id'],))
         subscription = cursor.fetchone()
         
-        # Get students count
         cursor.execute('SELECT COUNT(*) as count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution_id,))
         student_count = cursor.fetchone()['count']
         
-        # Get active students (active in last 30 days)
-        cursor.execute('''
-            SELECT COUNT(*) as count 
+        cursor.execute('''SELECT COUNT(*) as count 
             FROM users 
             WHERE institution_id = %s 
             AND user_type = "institution_student" 
-            AND last_active > %s
-        ''', (institution_id, datetime.now() - timedelta(days=30)))
+            AND last_active > %s''',
+            (institution_id, datetime.now() - timedelta(days=30)))
         active_students = cursor.fetchone()['count']
         
-        # Get recent quiz results for all students
-        cursor.execute('''
-            SELECT r.*, u.username 
+        cursor.execute('''SELECT r.*, u.username 
             FROM results r 
             JOIN users u ON r.user_id = u.id 
             WHERE u.institution_id = %s 
             ORDER BY r.date_taken DESC 
-            LIMIT 10
-        ''', (institution_id,))
+            LIMIT 10''',
+            (institution_id,))
         recent_results = cursor.fetchall()
         
-        # Get average scores by student
-        cursor.execute('''
-            SELECT u.username, AVG(r.score / r.total_questions * 100) as avg_score, COUNT(r.id) as quiz_count
+        cursor.execute('''SELECT u.username, AVG(r.score / r.total_questions * 100) as avg_score, COUNT(r.id) as quiz_count
             FROM users u
             LEFT JOIN results r ON u.id = r.user_id
             WHERE u.institution_id = %s 
             AND u.user_type = "institution_student"
             GROUP BY u.id
-            ORDER BY avg_score DESC
-        ''', (institution_id,))
+            ORDER BY avg_score DESC''',
+            (institution_id,))
         student_performance = cursor.fetchall()
         
-        # Get all students for management
-        cursor.execute('''
-            SELECT u.*, 
+        cursor.execute('''SELECT u.*, 
                    COUNT(DISTINCT r.id) as quiz_count,
                    AVG(r.score / r.total_questions * 100) as avg_score
             FROM users u
@@ -643,11 +619,10 @@ def institution_dashboard():
             WHERE u.institution_id = %s 
             AND u.user_type = "institution_student"
             GROUP BY u.id
-            ORDER BY u.username
-        ''', (institution_id,))
+            ORDER BY u.username''',
+            (institution_id,))
         students = cursor.fetchall()
         
-        # Format the scores and dates
         for student in student_performance:
             student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] else 0
         
@@ -656,14 +631,7 @@ def institution_dashboard():
             if student['last_active']:
                 now = datetime.now()
                 diff = now - student['last_active']
-                if diff.days > 0:
-                    student['last_active_str'] = f"{diff.days} days ago"
-                elif diff.seconds >= 3600:
-                    student['last_active_str'] = f"{diff.seconds // 3600} hours ago"
-                elif diff.seconds >= 60:
-                    student['last_active_str'] = f"{diff.seconds // 60} minutes ago"
-                else:
-                    student['last_active_str'] = "Just now"
+                student['last_active_str'] = f"{diff.days} days ago" if diff.days > 0 else f"{diff.seconds // 3600} hours ago" if diff.seconds >= 3600 else f"{diff.seconds // 60} minutes ago" if diff.seconds >= 60 else "Just now"
             else:
                 student['last_active_str'] = "Never"
         
@@ -686,15 +654,11 @@ def institution_dashboard():
                           student_performance=student_performance,
                           students=students,
                           remaining_slots=institution['user_limit'] - student_count,
-                          form=form)  # Pass the form to the template
+                          form=form)
 
 @app.route('/add_student', methods=['GET', 'POST'])
-@login_required
+@institute_admin_required
 def add_student():
-    if session.get('user_type') != 'institution_admin':
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('index'))
-    
     institution_id = session.get('institution_id')
     
     form = AddStudentForm()
@@ -707,7 +671,6 @@ def add_student():
         cursor = conn.cursor(dictionary=True)
         
         try:
-            # Check if the institution has reached its user limit
             cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
             institution = cursor.fetchone()
             
@@ -715,22 +678,19 @@ def add_student():
             student_count = cursor.fetchone()['student_count']
             
             if student_count >= institution['user_limit']:
-                flash('You have reached your student limit. Please upgrade your subscription to add more students.', 'danger')
+                flash('You have reached your student limit.', 'danger')
                 return redirect(url_for('institution_dashboard'))
             
-            # Check if username already exists
             cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
             if cursor.fetchone():
-                flash('Username already exists. Please choose a different one.', 'danger')
+                flash('Username already exists.', 'danger')
                 return render_template('add_student.html', form=form)
             
-            # Create the student user
             hashed_password = generate_password_hash(password)
-            cursor.execute('''
-                INSERT INTO users 
+            cursor.execute('''INSERT INTO users 
                 (username, email, password, role, status, user_type, institution_id, last_active) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (username, email, hashed_password, 'user', 'active', 'institution_student', institution_id, datetime.now()))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)''',
+                (username, email, hashed_password, 'student_user', 'active', 'institution_student', institution_id, datetime.now()))
             
             conn.commit()
             flash(f'Student {username} added successfully.', 'success')
@@ -740,7 +700,7 @@ def add_student():
         except mysql.connector.Error as err:
             conn.rollback()
             logger.error(f"Database error adding student: {str(err)}")
-            flash('An error occurred adding the student. Please try again.', 'danger')
+            flash('An error occurred adding the student.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -748,30 +708,23 @@ def add_student():
     return render_template('add_student.html', form=form)
 
 @app.route('/remove_student/<int:student_id>', methods=['POST'])
-@login_required
+@institute_admin_required
 def remove_student(student_id):
-    if session.get('user_type') != 'institution_admin':
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('index'))
-    
     institution_id = session.get('institution_id')
     
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Verify the student belongs to this institution
-        cursor.execute('''
-            SELECT * FROM users 
-            WHERE id = %s AND institution_id = %s AND user_type = "institution_student"
-        ''', (student_id, institution_id))
+        cursor.execute('''SELECT * FROM users 
+            WHERE id = %s AND institution_id = %s AND user_type = "institution_student"''',
+            (student_id, institution_id))
         student = cursor.fetchone()
         
         if not student:
             flash('Student not found or does not belong to your institution.', 'danger')
             return redirect(url_for('institution_dashboard'))
         
-        # Delete the student
         cursor.execute('DELETE FROM users WHERE id = %s', (student_id,))
         conn.commit()
         
@@ -781,7 +734,7 @@ def remove_student(student_id):
     except mysql.connector.Error as err:
         conn.rollback()
         logger.error(f"Database error removing student: {str(err)}")
-        flash('An error occurred removing the student. Please try again.', 'danger')
+        flash('An error occurred removing the student.', 'danger')
     finally:
         cursor.close()
         conn.close()
@@ -789,12 +742,8 @@ def remove_student(student_id):
     return redirect(url_for('institution_dashboard'))
 
 @app.route('/export_institution_data/<format>')
-@login_required
+@institute_admin_required
 def export_institution_data(format):
-    if session.get('user_type') != 'institution_admin':
-        flash('You do not have permission to access this page.', 'danger')
-        return redirect(url_for('index'))
-    
     if format not in ['csv', 'pdf']:
         flash('Unsupported export format.', 'danger')
         return redirect(url_for('institution_dashboard'))
@@ -805,12 +754,8 @@ def export_institution_data(format):
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Get student performance data
-        cursor.execute('''
-            SELECT 
-                u.id, 
-                u.username, 
-                u.email,
+        cursor.execute('''SELECT 
+                u.id, u.username, u.email,
                 COUNT(r.id) as quizzes_taken,
                 AVG(r.score) as avg_score,
                 AVG(r.score / r.total_questions * 100) as avg_percentage,
@@ -824,23 +769,15 @@ def export_institution_data(format):
             WHERE u.institution_id = %s 
             AND u.user_type = "institution_student"
             GROUP BY u.id
-            ORDER BY u.username
-        ''', (institution_id,))
+            ORDER BY u.username''',
+            (institution_id,))
         student_data = cursor.fetchall()
         
         if format == 'csv':
             output = StringIO()
             writer = csv.writer(output)
+            writer.writerow(['Student ID', 'Username', 'Email', 'Quizzes Taken', 'Average Score', 'Average Percentage', 'Highest Percentage', 'Lowest Percentage', 'Average Time (seconds)', 'Last Quiz Date', 'Last Active'])
             
-            # Write header
-            writer.writerow([
-                'Student ID', 'Username', 'Email', 'Quizzes Taken', 
-                'Average Score', 'Average Percentage', 'Highest Percentage', 
-                'Lowest Percentage', 'Average Time (seconds)', 
-                'Last Quiz Date', 'Last Active'
-            ])
-            
-            # Write data
             for student in student_data:
                 writer.writerow([
                     student['id'],
@@ -861,13 +798,13 @@ def export_institution_data(format):
                 mimetype='text/csv',
                 headers={'Content-Disposition': f'attachment; filename=institution_performance_{session["institution_name"]}_{datetime.now().strftime("%Y%m%d")}.csv'}
             )
-        else:  # pdf
+        else:
             flash('PDF export functionality is coming soon.', 'info')
             return redirect(url_for('institution_dashboard'))
             
     except mysql.connector.Error as err:
         logger.error(f"Database error during export: {str(err)}")
-        flash('Error exporting data. Please try again.', 'danger')
+        flash('Error exporting data.', 'danger')
         return redirect(url_for('institution_dashboard'))
     finally:
         cursor.close()
@@ -892,25 +829,25 @@ def register():
         
         conn = get_db_connection()
         if conn is None:
-            flash("Database connection error. Please try again later.", 'danger')
+            flash("Database connection error.", 'danger')
             return redirect(url_for('register'))
             
         cursor = conn.cursor()
         try:
             cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
             if cursor.fetchone():
-                flash('Username already exists. Please choose a different one.', 'danger')
+                flash('Username already exists.', 'danger')
             else:
                 cursor.execute('INSERT INTO users (username, password, role, status, last_active) VALUES (%s, %s, %s, %s, %s)',
-                              (username, hashed_password, 'user', 'active', datetime.now()))
+                              (username, hashed_password, 'individual_user', 'active', datetime.now()))
                 conn.commit()
                 flash('Registration successful! You can now log in.', 'success')
-                logger.info(f"New user registered: {username}")
+                logger.info(f"New individual user registered: {username}")
                 return redirect(url_for('login'))
         except mysql.connector.Error as err:
             conn.rollback()
             logger.error(f"Database error during registration: {str(err)}")
-            flash('An error occurred during registration. Please try again.', 'danger')
+            flash('An error occurred during registration.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -930,7 +867,7 @@ def login():
         
         conn = get_db_connection()
         if conn is None:
-            flash("Database connection error. Please try again later.", 'danger')
+            flash("Database connection error.", 'danger')
             return redirect(url_for('login'))
             
         cursor = conn.cursor(dictionary=True)
@@ -950,13 +887,18 @@ def login():
                 conn.commit()
                 
                 logger.info(f"User {username} logged in successfully")
-                return redirect(url_for('admin_dashboard' if user['role'] == 'admin' else 'user_dashboard'))
+                if user['role'] == 'super_admin':
+                    return redirect(url_for('admin_dashboard'))
+                elif user['role'] == 'institute_admin':
+                    return redirect(url_for('institution_dashboard'))
+                else:
+                    return redirect(url_for('user_dashboard'))
             else:
                 flash('Invalid credentials or inactive account', 'danger')
                 logger.warning(f"Failed login attempt for username: {username}")
         except mysql.connector.Error as err:
             logger.error(f"Database error during login: {str(err)}")
-            flash('An error occurred during login. Please try again.', 'danger')
+            flash('An error occurred during login.', 'danger')
         finally:
             cursor.close()
             conn.close()
@@ -969,36 +911,38 @@ def logout():
     session.clear()
     flash('You have been successfully logged out.', 'success')
     logger.info(f"User {username} logged out")
-    return redirect(url_for('login'))
+    return redirect(url_for('choose_login'))
 
 @app.route('/user_dashboard')
 @login_required
 def user_dashboard():
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('login'))
         
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Fetch recent results with error handling
-        cursor.execute('''
-            SELECT id, score, total_questions, time_taken, date_taken 
+        cursor.execute('''SELECT id, score, total_questions, time_taken, date_taken 
             FROM results 
             WHERE user_id = %s 
             ORDER BY date_taken DESC 
-            LIMIT 5
-        ''', (session['user_id'],))
+            LIMIT 5''',
+            (session['user_id'],))
         recent_results = cursor.fetchall()
         
-        # Fetch total questions
         cursor.execute('SELECT COUNT(*) as count FROM questions')
         result = cursor.fetchone()
         total_questions = result['count'] if result and 'count' in result else 0
+        
+        if session.get('role') == 'institute_admin':
+            return redirect(url_for('institution_dashboard'))
+        elif session.get('role') == 'super_admin':
+            return redirect(url_for('admin_dashboard'))
     except mysql.connector.Error as err:
         logger.error(f"Database error in user dashboard: {str(err)}")
-        flash('Error retrieving dashboard data. Please try again.', 'danger')
+        flash('Error retrieving dashboard data.', 'danger')
         recent_results = []
         total_questions = 0
     finally:
@@ -1007,7 +951,8 @@ def user_dashboard():
         
     return render_template('user_dashboard.html', 
                           results=recent_results, 
-                          total_questions=total_questions)
+                          total_questions=total_questions,
+                          role=session['role'])
 
 @app.route('/export_user_dashboard/<format>')
 @login_required
@@ -1022,18 +967,17 @@ def export_user_dashboard(format):
         
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('user_dashboard'))
         
     cursor = conn.cursor(dictionary=True)
     
     try:
-        cursor.execute('''
-            SELECT id, score, total_questions, time_taken, date_taken 
+        cursor.execute('''SELECT id, score, total_questions, time_taken, date_taken 
             FROM results 
             WHERE user_id = %s 
-            ORDER BY date_taken DESC
-        ''', (session['user_id'],))
+            ORDER BY date_taken DESC''',
+            (session['user_id'],))
         results = cursor.fetchall()
         
         output = StringIO()
@@ -1058,45 +1002,39 @@ def export_user_dashboard(format):
         )
     except mysql.connector.Error as err:
         logger.error(f"Database error during export: {str(err)}")
-        flash('Error exporting data. Please try again.', 'danger')
+        flash('Error exporting data.', 'danger')
         return redirect(url_for('user_dashboard'))
     finally:
         cursor.close()
         conn.close()
 
 @app.route('/admin_dashboard')
-@admin_required
+@super_admin_required
 def admin_dashboard():
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
-        return redirect(url_for('login'))
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('choose_login'))
         
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Get active users in the last 30 minutes
-        cursor.execute('''
-            SELECT COUNT(*) as count 
+        cursor.execute('''SELECT COUNT(*) as count 
             FROM users 
-            WHERE last_active > %s
-        ''', (datetime.now() - timedelta(minutes=30),))
+            WHERE last_active > %s''',
+            (datetime.now() - timedelta(minutes=30),))
         result = cursor.fetchone()
         active_users = result['count'] if result else 0
         
-        # Get total questions
         cursor.execute('SELECT COUNT(*) as count FROM questions')
         result = cursor.fetchone()
         total_questions = result['count'] if result else 0
         
-        # Get total quizzes taken
         cursor.execute('SELECT COUNT(*) as count FROM results')
         result = cursor.fetchone()
         total_quizzes = result['count'] if result else 0
         
-        # Get recent activity for dashboard
-        cursor.execute('''
-            SELECT 'question' as type, q.question as content, u.username, q.created_at as date
+        cursor.execute('''SELECT 'question' as type, q.question as content, u.username, q.created_at as date
             FROM questions q
             JOIN users u ON q.created_by = u.id
             UNION ALL
@@ -1106,8 +1044,7 @@ def admin_dashboard():
             FROM results r
             JOIN users u ON r.user_id = u.id
             ORDER BY date DESC
-            LIMIT 10
-        ''')
+            LIMIT 10''')
         recent_activity = cursor.fetchall()
     except mysql.connector.Error as err:
         logger.error(f"Database error in admin dashboard: {str(err)}")
@@ -1120,7 +1057,6 @@ def admin_dashboard():
         cursor.close()
         conn.close()
     
-    # Add current datetime for the template
     now = datetime.now()
         
     return render_template('admin_dashboard.html', 
@@ -1130,19 +1066,17 @@ def admin_dashboard():
                           recent_activity=recent_activity,
                           now=now)
 
-
 @app.route('/quiz', methods=['GET', 'POST'])
-@login_required
+@quiz_access_required
 def quiz():
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('user_dashboard'))
         
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Fetch filter options
         cursor.execute('SELECT DISTINCT exam_name FROM questions')
         exam_names = [row['exam_name'] for row in cursor.fetchall()]
         
@@ -1162,9 +1096,7 @@ def quiz():
         
         questions = []
         
-        # Process form submissions
         if request.method == 'POST':
-            # Handle filter or generate request
             if 'filter' in request.form or 'generate' in request.form:
                 query = 'SELECT * FROM questions WHERE 1=1'
                 params = []
@@ -1176,7 +1108,7 @@ def quiz():
                     if filters['year']:
                         query += ' AND year = %s'
                         params.append(int(filters['year']) if filters['year'].isdigit() else 0)
-                else:  # subject_wise
+                else:
                     if filters['subject']:
                         query += ' AND subject = %s'
                         params.append(filters['subject'])
@@ -1186,35 +1118,29 @@ def quiz():
                         query += f" AND (topics REGEXP CONCAT('(^|,)\\\\s*(', REPLACE(CONCAT({placeholders}), ',', '|'), ')\\\\s*(,|$)'))"
                         params.extend(topics)
                 
-                # Add difficulty filter if provided
                 difficulty = request.form.get('difficulty')
                 if difficulty in ['easy', 'medium', 'hard']:
                     query += ' AND difficulty = %s'
                     params.append(difficulty)
                     
-                # Limit and randomize
                 query += ' ORDER BY RAND() LIMIT 10'
                 
                 cursor.execute(query, params)
                 questions = cursor.fetchall()
                 
                 if not questions:
-                    flash('No questions found matching your criteria. Try different filters.', 'warning')
+                    flash('No questions found matching your criteria.', 'warning')
                 else:
-                    # Store questions in session for submission
                     session['quiz_questions'] = [q['id'] for q in questions]
                     session['quiz_started_at'] = datetime.now().timestamp()
             
-            # Handle quiz submission
             elif any(key.startswith('question_') for key in request.form):
                 if 'quiz_questions' not in session:
-                    flash('No active quiz found. Please generate a new quiz.', 'warning')
+                    flash('No active quiz found.', 'warning')
                     return redirect(url_for('quiz'))
                     
-                # Get question IDs from session
                 question_ids = session['quiz_questions']
                 
-                # Fetch the actual questions
                 placeholders = ', '.join(['%s'] * len(question_ids))
                 cursor.execute(f'SELECT * FROM questions WHERE id IN ({placeholders})', question_ids)
                 questions_data = {q['id']: q for q in cursor.fetchall()}
@@ -1222,36 +1148,23 @@ def quiz():
                 score = 0
                 answers = {}
                 
-                # Calculate score
                 for qid in question_ids:
                     user_answer = request.form.get(f'question_{qid}')
-                    
                     if user_answer:
                         answers[str(qid)] = user_answer
                         if qid in questions_data and user_answer == questions_data[qid]['correct_answer']:
                             score += 1
                 
-                # Calculate time taken
                 start_time = session.get('quiz_started_at', 0)
                 time_taken = int(datetime.now().timestamp() - start_time) if start_time else 0
                 
-                # Save results
-                cursor.execute('''
-                    INSERT INTO results 
+                cursor.execute('''INSERT INTO results 
                     (user_id, score, total_questions, time_taken, answers, date_taken) 
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                ''', (
-                    session['user_id'],
-                    score,
-                    len(question_ids),
-                    time_taken,
-                    json.dumps(answers),
-                    datetime.now()
-                ))
+                    VALUES (%s, %s, %s, %s, %s, %s)''',
+                    (session['user_id'], score, len(question_ids), time_taken, json.dumps(answers), datetime.now()))
                 conn.commit()
                 result_id = cursor.lastrowid
                 
-                # Notify admins via socket
                 socketio.emit('new_result', {
                     'username': session['username'],
                     'score': score,
@@ -1261,7 +1174,6 @@ def quiz():
                 
                 logger.info(f"Quiz completed by {session['username']}, score: {score}/{len(question_ids)}")
                 
-                # Clear quiz session data
                 session.pop('quiz_questions', None)
                 session.pop('quiz_started_at', None)
                 
@@ -1269,7 +1181,7 @@ def quiz():
                 return redirect(url_for('results', result_id=result_id))
     except mysql.connector.Error as err:
         logger.error(f"Database error in quiz: {str(err)}")
-        flash('Error processing quiz data. Please try again.', 'danger')
+        flash('Error processing quiz data.', 'danger')
         questions = []
     finally:
         cursor.close()
@@ -1293,30 +1205,23 @@ def results():
     
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('user_dashboard'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Fetch the result
-        cursor.execute('''
-            SELECT * FROM results 
-            WHERE id = %s AND user_id = %s
-        ''', (result_id, session['user_id']))
+        cursor.execute('''SELECT * FROM results 
+            WHERE id = %s AND user_id = %s''',
+            (result_id, session['user_id']))
         result = cursor.fetchone()
         
         if not result:
             flash('Result not found or you do not have permission to view it.', 'danger')
             return redirect(url_for('user_dashboard'))
         
-        # Ensure total_questions is not zero
         total = max(1, result['total_questions'])
-        
-        # Parse answers
         answers = json.loads(result['answers']) if result['answers'] else {}
-        
-        # Get detailed information for each question
         detailed_results = []
         
         for qid, user_answer in answers.items():
@@ -1324,21 +1229,14 @@ def results():
             q = cursor.fetchone()
             
             if q:
-                # Check if user has already reviewed this question
-                cursor.execute('''
-                    SELECT * FROM question_reviews 
-                    WHERE question_id = %s AND user_id = %s
-                ''', (q['id'], session['user_id']))
+                cursor.execute('''SELECT * FROM question_reviews 
+                    WHERE question_id = %s AND user_id = %s''',
+                    (q['id'], session['user_id']))
                 existing_review = cursor.fetchone()
                 
                 detailed_results.append({
                     'question': q['question'],
-                    'options': {
-                        'a': q['option_a'],
-                        'b': q['option_b'],
-                        'c': q['option_c'],
-                        'd': q['option_d']
-                    },
+                    'options': {'a': q['option_a'], 'b': q['option_b'], 'c': q['option_c'], 'd': q['option_d']},
                     'correct_answer': q['correct_answer'],
                     'user_answer': user_answer,
                     'explanation': q['explanation'],
@@ -1375,45 +1273,37 @@ def review_question(qid):
     
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(request.referrer or url_for('user_dashboard'))
     
     cursor = conn.cursor()
     
     try:
-        # Check if this question exists
         cursor.execute('SELECT id FROM questions WHERE id = %s', (qid,))
         if not cursor.fetchone():
             flash('Question not found.', 'danger')
             return redirect(request.referrer or url_for('user_dashboard'))
         
-        # Check if user has already reviewed this question
-        cursor.execute('''
-            SELECT id FROM question_reviews 
-            WHERE question_id = %s AND user_id = %s
-        ''', (qid, session['user_id']))
+        cursor.execute('''SELECT id FROM question_reviews 
+            WHERE question_id = %s AND user_id = %s''',
+            (qid, session['user_id']))
         existing_review = cursor.fetchone()
         
         if existing_review:
-            # Update existing review
-            cursor.execute('''
-                UPDATE question_reviews 
+            cursor.execute('''UPDATE question_reviews 
                 SET comment = %s, rating = %s, created_at = %s
-                WHERE question_id = %s AND user_id = %s
-            ''', (comment, rating, datetime.now(), qid, session['user_id']))
+                WHERE question_id = %s AND user_id = %s''',
+                (comment, rating, datetime.now(), qid, session['user_id']))
             flash('Your review has been updated.', 'success')
         else:
-            # Insert new review
-            cursor.execute('''
-                INSERT INTO question_reviews 
+            cursor.execute('''INSERT INTO question_reviews 
                 (question_id, user_id, comment, rating) 
-                VALUES (%s, %s, %s, %s)
-            ''', (qid, session['user_id'], comment, rating))
+                VALUES (%s, %s, %s, %s)''',
+                (qid, session['user_id'], comment, rating))
             flash('Your review has been submitted.', 'success')
         
         conn.commit()
         
-        # Notify admins via socket
         socketio.emit('new_review', {
             'username': session['username'],
             'question_id': qid,
@@ -1425,7 +1315,7 @@ def review_question(qid):
     except mysql.connector.Error as err:
         conn.rollback()
         logger.error(f"Database error during question review: {str(err)}")
-        flash('Error submitting review. Please try again.', 'danger')
+        flash('Error submitting review.', 'danger')
     finally:
         cursor.close()
         conn.close()
@@ -1433,23 +1323,20 @@ def review_question(qid):
     return redirect(request.referrer or url_for('user_dashboard'))
 
 @app.route('/manage_questions', methods=['GET', 'POST'])
-@admin_required
+@super_admin_required
 def manage_questions():
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('admin_dashboard'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Handle new question submission
         if request.method == 'POST' and 'question' in request.form:
-            # Create a form instance and process the form data
             form = QuestionForm(request.form)
             
             if form.validate():
-                # Sanitize inputs
                 question = sanitize_input(form.question.data)
                 option_a = sanitize_input(form.option_a.data)
                 option_b = sanitize_input(form.option_b.data)
@@ -1464,30 +1351,25 @@ def manage_questions():
                 year = form.year.data
                 explanation = sanitize_input(form.explanation.data)
                 
-                cursor.execute('''
-                    INSERT INTO questions 
+                cursor.execute('''INSERT INTO questions 
                     (question, option_a, option_b, option_c, option_d, correct_answer, 
                      category, difficulty, exam_name, subject, topics, year, explanation, created_by) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (
-                    question, option_a, option_b, option_c, option_d, correct_answer,
-                    category, difficulty, exam_name, subject, topics, year, explanation, session['user_id']
-                ))
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                    (question, option_a, option_b, option_c, option_d, correct_answer,
+                     category, difficulty, exam_name, subject, topics, year, explanation, session['user_id']))
                 conn.commit()
                 
-                # Notify via socket
                 socketio.emit('new_question', {
                     'question': question[:50] + '...' if len(question) > 50 else question
                 }, namespace='/admin')
                 
                 flash('Question added successfully.', 'success')
-                logger.info(f"New question added by admin {session['username']}")
+                logger.info(f"New question added by super_admin {session['username']}")
             else:
                 for field, errors in form.errors.items():
                     for error in errors:
                         flash(f"Error in {field}: {error}", 'danger')
         
-        # Handle filter submissions
         filters = {}
         if request.method == 'POST' and 'filter' in request.form:
             filters = {
@@ -1503,15 +1385,12 @@ def manage_questions():
             if filters.get('exam_name'):
                 query += ' AND q.exam_name = %s'
                 params.append(filters['exam_name'])
-            
             if filters.get('year') and filters['year'].isdigit():
                 query += ' AND q.year = %s'
                 params.append(int(filters['year']))
-            
             if filters.get('subject'):
                 query += ' AND q.subject = %s'
                 params.append(filters['subject'])
-            
             if filters.get('topics'):
                 topics = [t.strip() for t in filters['topics'].split(',')]
                 placeholders = ', '.join(['%s'] * len(topics))
@@ -1521,24 +1400,18 @@ def manage_questions():
             query += ' ORDER BY q.id DESC'
             cursor.execute(query, params)
         else:
-            # Default query without filters
-            cursor.execute('''
-                SELECT q.*, u.username 
+            cursor.execute('''SELECT q.*, u.username 
                 FROM questions q 
                 LEFT JOIN users u ON q.created_by = u.id 
                 ORDER BY q.id DESC 
-                LIMIT 100
-            ''')
+                LIMIT 100''')
         
         questions = cursor.fetchall()
         
-        # Get filter options
         cursor.execute('SELECT DISTINCT exam_name FROM questions')
         exam_names = [row['exam_name'] for row in cursor.fetchall()]
-        
         cursor.execute('SELECT DISTINCT year FROM questions ORDER BY year DESC')
         years = [row['year'] for row in cursor.fetchall()]
-        
         cursor.execute('SELECT DISTINCT subject FROM questions')
         subjects = [row['subject'] for row in cursor.fetchall()]
         
@@ -1561,20 +1434,19 @@ def manage_questions():
                           filters=filters)
 
 @app.route('/edit_question/<int:question_id>', methods=['GET', 'POST'])
-@admin_required
+@super_admin_required
 def edit_question(question_id):
     form = QuestionForm()
     
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('manage_questions'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
         if request.method == 'GET':
-            # Fetch question data for editing
             cursor.execute('SELECT * FROM questions WHERE id = %s', (question_id,))
             question = cursor.fetchone()
             
@@ -1582,7 +1454,6 @@ def edit_question(question_id):
                 flash('Question not found.', 'danger')
                 return redirect(url_for('manage_questions'))
             
-            # Populate form with existing data
             form.question.data = question['question']
             form.option_a.data = question['option_a']
             form.option_b.data = question['option_b']
@@ -1598,33 +1469,20 @@ def edit_question(question_id):
             form.explanation.data = question['explanation']
         
         elif form.validate_on_submit():
-            # Update question with form data
-            cursor.execute('''
-                UPDATE questions
+            cursor.execute('''UPDATE questions
                 SET question = %s, option_a = %s, option_b = %s, option_c = %s, option_d = %s,
                     correct_answer = %s, category = %s, difficulty = %s, exam_name = %s,
                     subject = %s, topics = %s, year = %s, explanation = %s
-                WHERE id = %s
-            ''', (
-                sanitize_input(form.question.data),
-                sanitize_input(form.option_a.data),
-                sanitize_input(form.option_b.data),
-                sanitize_input(form.option_c.data),
-                sanitize_input(form.option_d.data),
-                form.correct_answer.data,
-                sanitize_input(form.category.data),
-                form.difficulty.data,
-                sanitize_input(form.exam_name.data),
-                sanitize_input(form.subject.data),
-                sanitize_input(form.topics.data),
-                form.year.data,
-                sanitize_input(form.explanation.data),
-                question_id
-            ))
+                WHERE id = %s''',
+                (sanitize_input(form.question.data), sanitize_input(form.option_a.data), sanitize_input(form.option_b.data),
+                 sanitize_input(form.option_c.data), sanitize_input(form.option_d.data), form.correct_answer.data,
+                 sanitize_input(form.category.data), form.difficulty.data, sanitize_input(form.exam_name.data),
+                 sanitize_input(form.subject.data), sanitize_input(form.topics.data), form.year.data,
+                 sanitize_input(form.explanation.data), question_id))
             conn.commit()
             
             flash('Question updated successfully.', 'success')
-            logger.info(f"Question {question_id} updated by admin {session['username']}")
+            logger.info(f"Question {question_id} updated by super_admin {session['username']}")
             return redirect(url_for('manage_questions'))
         
     except mysql.connector.Error as err:
@@ -1639,17 +1497,16 @@ def edit_question(question_id):
     return render_template('edit_question.html', form=form)
 
 @app.route('/delete_question/<int:qid>', methods=['POST'])
-@admin_required
+@super_admin_required
 def delete_question(qid):
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('manage_questions'))
     
     cursor = conn.cursor()
     
     try:
-        # Verify question exists
         cursor.execute('SELECT id FROM questions WHERE id = %s', (qid,))
         if not cursor.fetchone():
             flash('Question not found.', 'danger')
@@ -1657,7 +1514,7 @@ def delete_question(qid):
             cursor.execute('DELETE FROM questions WHERE id = %s', (qid,))
             conn.commit()
             flash('Question deleted successfully.', 'success')
-            logger.info(f"Question {qid} deleted by admin {session['username']}")
+            logger.info(f"Question {qid} deleted by super_admin {session['username']}")
     except mysql.connector.Error as err:
         conn.rollback()
         logger.error(f"Database error during question deletion: {str(err)}")
@@ -1669,20 +1526,19 @@ def delete_question(qid):
     return redirect(url_for('manage_questions'))
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
-@admin_required
+@super_admin_required
 def edit_user(user_id):
     form = UserForm()
     
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('manage_users'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
         if request.method == 'GET':
-            # Fetch user data for editing
             cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
             user = cursor.fetchone()
             
@@ -1690,17 +1546,14 @@ def edit_user(user_id):
                 flash('User not found.', 'danger')
                 return redirect(url_for('manage_users'))
             
-            # Check if trying to edit self
-            if user['id'] == session.get('user_id') and user['role'] == 'admin':
-                flash("You cannot modify your own admin privileges.", "warning")
+            if user['id'] == session.get('user_id') and user['role'] == 'super_admin':
+                flash("You cannot modify your own super admin privileges.", "warning")
             
-            # Populate form with existing data
             form.username.data = user['username']
             form.role.data = user['role']
             form.status.data = user['status']
         
         elif form.validate_on_submit():
-            # Handle new user creation
             if user_id == 0:
                 username = sanitize_input(form.username.data)
                 role = form.role.data
@@ -1711,24 +1564,20 @@ def edit_user(user_id):
                     flash('Password is required for new users.', 'danger')
                     return redirect(url_for('manage_users'))
                 
-                # Check if username already exists
                 cursor.execute('SELECT id FROM users WHERE username = %s', (username,))
                 if cursor.fetchone():
-                    flash('Username already exists. Please choose a different one.', 'danger')
+                    flash('Username already exists.', 'danger')
                     return redirect(url_for('manage_users'))
                 
-                # Create new user
                 hashed_password = generate_password_hash(password)
-                cursor.execute('''
-                    INSERT INTO users (username, password, role, status, last_active) 
-                    VALUES (%s, %s, %s, %s, %s)
-                ''', (username, hashed_password, role, status, datetime.now()))
+                cursor.execute('''INSERT INTO users (username, password, role, status, last_active) 
+                    VALUES (%s, %s, %s, %s, %s)''',
+                    (username, hashed_password, role, status, datetime.now()))
                 conn.commit()
                 
                 flash('User created successfully.', 'success')
                 return redirect(url_for('manage_users'))
             
-            # Get current user info to check for self-demotion
             cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
             current_user = cursor.fetchone()
             
@@ -1736,41 +1585,36 @@ def edit_user(user_id):
                 flash('User not found.', 'danger')
                 return redirect(url_for('manage_users'))
             
-            if current_user['id'] == session.get('user_id') and current_user['role'] == 'admin' and form.role.data != 'admin':
-                flash("You cannot remove your own admin privileges.", "danger")
+            if current_user['id'] == session.get('user_id') and current_user['role'] == 'super_admin' and form.role.data != 'super_admin':
+                flash("You cannot remove your own super admin privileges.", "danger")
                 return redirect(url_for('edit_user', user_id=user_id))
             
-            # Get form data
             username = sanitize_input(form.username.data)
             role = form.role.data
             status = form.status.data
             new_password = form.password.data
             
-            # Check if username already exists
             if username != current_user['username']:
                 cursor.execute('SELECT id FROM users WHERE username = %s AND id != %s', (username, user_id))
                 if cursor.fetchone():
-                    flash('Username already exists. Please choose a different one.', 'danger')
+                    flash('Username already exists.', 'danger')
                     return redirect(url_for('edit_user', user_id=user_id))
             
-            # Construct update query
             if new_password:
                 hashed_password = generate_password_hash(new_password)
-                cursor.execute('''
-                    UPDATE users 
+                cursor.execute('''UPDATE users 
                     SET username = %s, role = %s, status = %s, password = %s 
-                    WHERE id = %s
-                ''', (username, role, status, hashed_password, user_id))
+                    WHERE id = %s''',
+                    (username, role, status, hashed_password, user_id))
             else:
-                cursor.execute('''
-                    UPDATE users 
+                cursor.execute('''UPDATE users 
                     SET username = %s, role = %s, status = %s 
-                    WHERE id = %s
-                ''', (username, role, status, user_id))
+                    WHERE id = %s''',
+                    (username, role, status, user_id))
             
             conn.commit()
             flash('User updated successfully.', 'success')
-            logger.info(f"User {user_id} updated by admin {session['username']}")
+            logger.info(f"User {user_id} updated by super_admin {session['username']}")
             return redirect(url_for('manage_users'))
     
     except mysql.connector.Error as err:
@@ -1785,42 +1629,31 @@ def edit_user(user_id):
     return render_template('edit_user.html', form=form, user_id=user_id)
 
 @app.route('/manage_users')
-@admin_required
+@super_admin_required
 def manage_users():
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('admin_dashboard'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Fetch all users
-        cursor.execute('''
-            SELECT u.*, 
+        cursor.execute('''SELECT u.*, 
                    COUNT(DISTINCT r.id) as quiz_count,
                    AVG(r.score / r.total_questions * 100) as avg_score
             FROM users u
             LEFT JOIN results r ON u.id = r.user_id
             GROUP BY u.id
-            ORDER BY u.last_active DESC
-        ''')
+            ORDER BY u.last_active DESC''')
         users = cursor.fetchall()
         
-        # Format the average score and last_active
         for user in users:
             user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else None
             if user['last_active']:
                 now = datetime.now()
                 diff = now - user['last_active']
-                if diff.days > 0:
-                    user['last_active_str'] = f"{diff.days} days ago"
-                elif diff.seconds >= 3600:
-                    user['last_active_str'] = f"{diff.seconds // 3600} hours ago"
-                elif diff.seconds >= 60:
-                    user['last_active_str'] = f"{diff.seconds // 60} minutes ago"
-                else:
-                    user['last_active_str'] = "Just now"
+                user['last_active_str'] = f"{diff.days} days ago" if diff.days > 0 else f"{diff.seconds // 3600} hours ago" if diff.seconds >= 3600 else f"{diff.seconds // 60} minutes ago" if diff.seconds >= 60 else "Just now"
             else:
                 user['last_active_str'] = "Never"
     
@@ -1834,24 +1667,21 @@ def manage_users():
     
     return render_template('manage_users.html', users=users)
 
-
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
-@admin_required
+@super_admin_required
 def delete_user(user_id):
-    # Prevent self-deletion
     if user_id == session['user_id']:
         flash('You cannot delete your own account.', 'danger')
         return redirect(url_for('manage_users'))
     
     conn = get_db_connection()
     if conn is None:
-        flash('Database connection error. Please try again later.', 'danger')
+        flash('Database connection error.', 'danger')
         return redirect(url_for('manage_users'))
     
     cursor = conn.cursor(dictionary=True)
     
     try:
-        # Check if user exists and is not the last admin
         cursor.execute('SELECT role FROM users WHERE id = %s', (user_id,))
         user = cursor.fetchone()
         
@@ -1859,20 +1689,19 @@ def delete_user(user_id):
             flash('User not found.', 'danger')
             return redirect(url_for('manage_users'))
         
-        if user['role'] == 'admin':
-            cursor.execute('SELECT COUNT(*) as count FROM users WHERE role = "admin"')
+        if user['role'] == 'super_admin':
+            cursor.execute('SELECT COUNT(*) as count FROM users WHERE role = "super_admin"')
             admin_count = cursor.fetchone()['count']
             
             if admin_count <= 1:
-                flash('Cannot delete the last admin user.', 'danger')
+                flash('Cannot delete the last super admin user.', 'danger')
                 return redirect(url_for('manage_users'))
         
-        # Delete the user and related data (cascading delete should handle relations)
         cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
         conn.commit()
         
         flash('User and all associated data deleted successfully.', 'success')
-        logger.info(f"User {user_id} deleted by admin {session['username']}")
+        logger.info(f"User {user_id} deleted by super_admin {session['username']}")
     
     except mysql.connector.Error as err:
         conn.rollback()
@@ -1902,18 +1731,17 @@ def request_entity_too_large(e):
 # SocketIO Events
 @socketio.on('connect', namespace='/admin')
 def handle_admin_connect():
-    if 'username' not in session or session.get('role') != 'admin':
+    if 'username' not in session or session.get('role') != 'super_admin':
         return False
     
     conn = get_db_connection()
     if conn:
         cursor = conn.cursor(dictionary=True)
         try:
-            cursor.execute('''
-                SELECT COUNT(*) as count 
+            cursor.execute('''SELECT COUNT(*) as count 
                 FROM users 
-                WHERE last_active > %s
-            ''', (datetime.now() - timedelta(minutes=30),))
+                WHERE last_active > %s''',
+                (datetime.now() - timedelta(minutes=30),))
             result = cursor.fetchone()
             active_users = result['count'] if result else 0
             
