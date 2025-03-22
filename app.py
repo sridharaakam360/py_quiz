@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, IntegerField, SubmitField, PasswordField
-from wtforms.validators import DataRequired, Length, ValidationError
+from wtforms import StringField, TextAreaField, SelectField, IntegerField, SubmitField, PasswordField, RadioField
+from wtforms.validators import DataRequired, Length, ValidationError, Regexp
 import mysql.connector
 from mysql.connector import pooling
 import logging
@@ -142,6 +142,44 @@ class UserForm(FlaskForm):
     password = PasswordField('New Password (leave blank to keep unchanged)', validators=[Length(min=0, max=50)])
     submit = SubmitField('Update User')
 
+# Add new forms to the app.py file:
+
+class InstitutionRegisterForm(FlaskForm):
+    institution_name = StringField('Institution Name', validators=[DataRequired(), Length(min=3, max=255)])
+    admin_name = StringField('Admin Name', validators=[DataRequired(), Length(min=3, max=50)])
+    email = StringField('Email Address', validators=[DataRequired(), Regexp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', message='Invalid email address')])
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=50)])
+    subscription_plan = SelectField('Subscription Plan', coerce=int, validators=[DataRequired()])
+    submit = SubmitField('Register Institution')
+
+class StudentRegisterForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    email = StringField('Email', validators=[DataRequired(), Regexp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', message='Invalid email address')])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=50)])
+    institution_code = StringField('Institution Code', validators=[DataRequired(), Length(min=6, max=20)])
+    submit = SubmitField('Register as Student')
+
+class LoginTypeForm(FlaskForm):
+    login_type = RadioField('Login Type', choices=[
+        ('individual', 'Individual Login'), 
+        ('institution', 'Institution Admin'), 
+        ('student', 'Institution Student')
+    ], validators=[DataRequired()])
+    submit = SubmitField('Continue')
+
+class InstitutionLoginForm(FlaskForm):
+    institution_code = StringField('Institution Code', validators=[DataRequired(), Length(min=6, max=20)])
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=50)])
+    submit = SubmitField('Login')
+
+class AddStudentForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    email = StringField('Email', validators=[DataRequired(), Regexp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', message='Invalid email address')])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=50)])
+    submit = SubmitField('Add Student')
+
 # Database Initialization
 def init_db():
     try:
@@ -255,6 +293,585 @@ def index():
         else:
             return redirect(url_for('user_dashboard'))
     return redirect(url_for('login'))
+
+# Add these routes to app.py:
+
+@app.route('/choose_login', methods=['GET', 'POST'])
+def choose_login():
+    form = LoginTypeForm()
+    if form.validate_on_submit():
+        login_type = form.login_type.data
+        if login_type == 'individual':
+            return redirect(url_for('login'))
+        elif login_type == 'institution':
+            return redirect(url_for('institution_login'))
+        else:  # login_type == 'student'
+            return redirect(url_for('student_login'))
+    return render_template('choose_login.html', form=form)
+
+@app.route('/register_institution', methods=['GET', 'POST'])
+def register_institution():
+    form = InstitutionRegisterForm()
+    
+    # Get plans for dropdown
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute('SELECT id, name, price, max_users FROM subscription_plans WHERE is_institution = TRUE')
+    plans = cursor.fetchall()
+    form.subscription_plan.choices = [(plan['id'], f"{plan['name']} (${plan['price']} - Up to {plan['max_users']} users)") for plan in plans]
+    
+    if form.validate_on_submit():
+        institution_name = sanitize_input(form.institution_name.data)
+        admin_name = sanitize_input(form.admin_name.data)
+        email = sanitize_input(form.email.data)
+        username = sanitize_input(form.username.data)
+        password = form.password.data
+        plan_id = form.subscription_plan.data
+        
+        # Get the selected plan
+        cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (plan_id,))
+        plan = cursor.fetchone()
+        if not plan:
+            flash('Invalid subscription plan selected.', 'danger')
+            return redirect(url_for('register_institution'))
+        
+        # Generate a unique institution code
+        import random
+        import string
+        institution_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        
+        try:
+            # Check if username already exists
+            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+            if cursor.fetchone():
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return render_template('register_institution.html', form=form)
+            
+            # Start a transaction (only if one isn't already in progress)
+            if not conn.in_transaction:
+                conn.start_transaction()
+            
+            # Create the admin user
+            hashed_password = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users 
+                (username, email, password, role, status, user_type, last_active) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ''', (username, email, hashed_password, 'admin', 'active', 'institution_admin', datetime.now()))
+            admin_id = cursor.lastrowid
+            
+            # Calculate subscription end date
+            start_date = datetime.now()
+            end_date = start_date + timedelta(days=plan['duration_days'])
+            
+            # Create the institution
+            cursor.execute('''
+                INSERT INTO institutions
+                (name, admin_id, subscription_plan_id, user_limit, subscription_start, subscription_end, status, institution_code)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (institution_name, admin_id, plan_id, plan['max_users'], start_date, end_date, 'active', institution_code))
+            institution_id = cursor.lastrowid
+            
+            # Update the admin user with institution_id
+            cursor.execute('''
+                UPDATE users
+                SET institution_id = %s,
+                    subscription_plan_id = %s,
+                    subscription_start = %s,
+                    subscription_end = %s
+                WHERE id = %s
+            ''', (institution_id, plan_id, start_date, end_date, admin_id))
+            
+            # Add to subscription history
+            cursor.execute('''
+                INSERT INTO subscription_history
+                (institution_id, subscription_plan_id, start_date, end_date)
+                VALUES (%s, %s, %s, %s)
+            ''', (institution_id, plan_id, start_date, end_date))
+            
+            conn.commit()
+            flash(f'Institution registered successfully! Your institution code is: {institution_code}. Please save this code for your students to join.', 'success')
+            logger.info(f"New institution registered: {institution_name}")
+            return redirect(url_for('login'))
+            
+        except mysql.connector.Error as err:
+            if conn.in_transaction:
+                conn.rollback()
+            logger.error(f"Database error during institution registration: {str(err)}")
+            flash('An error occurred during registration. Please try again.', 'danger')
+    
+    return render_template('register_institution.html', form=form)
+
+@app.route('/institution_login', methods=['GET', 'POST'])
+def institution_login():
+    form = InstitutionLoginForm()
+    if form.validate_on_submit():
+        institution_code = sanitize_input(form.institution_code.data)
+        username = sanitize_input(form.username.data)
+        password = form.password.data
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Find the institution
+            cursor.execute('SELECT * FROM institutions WHERE institution_code = %s', (institution_code,))
+            institution = cursor.fetchone()
+            
+            if not institution:
+                flash('Institution not found. Please check your institution code.', 'danger')
+                return render_template('institution_login.html', form=form)
+            
+            # Find the user
+            cursor.execute('''
+                SELECT * FROM users 
+                WHERE username = %s 
+                AND institution_id = %s 
+                AND user_type = 'institution_admin'
+            ''', (username, institution['id']))
+            user = cursor.fetchone()
+            
+            if user and check_password_hash(user['password'], password) and user['status'] == 'active':
+                session.clear()
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['role'] = user['role']
+                session['user_type'] = user['user_type']
+                session['institution_id'] = institution['id']
+                session['institution_name'] = institution['name']
+                session.permanent = True
+                
+                cursor.execute('UPDATE users SET last_active = %s WHERE id = %s',
+                              (datetime.now(), user['id']))
+                conn.commit()
+                
+                logger.info(f"Institution admin {username} logged in")
+                return redirect(url_for('institution_dashboard'))
+            else:
+                flash('Invalid credentials or inactive account', 'danger')
+        except mysql.connector.Error as err:
+            logger.error(f"Database error during institution login: {str(err)}")
+            flash('An error occurred during login. Please try again.', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('institution_login.html', form=form)
+
+@app.route('/student_login', methods=['GET', 'POST'])
+def student_login():
+    form = InstitutionLoginForm()
+    if form.validate_on_submit():
+        institution_code = sanitize_input(form.institution_code.data)
+        username = sanitize_input(form.username.data)
+        password = form.password.data
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Find the institution
+            cursor.execute('SELECT * FROM institutions WHERE institution_code = %s', (institution_code,))
+            institution = cursor.fetchone()
+            
+            if not institution:
+                flash('Institution not found. Please check your institution code.', 'danger')
+                return render_template('student_login.html', form=form)
+            
+            # Find the user
+            cursor.execute('''
+                SELECT * FROM users 
+                WHERE username = %s 
+                AND institution_id = %s 
+                AND user_type = 'institution_student'
+            ''', (username, institution['id']))
+            user = cursor.fetchone()
+            
+            if user and check_password_hash(user['password'], password) and user['status'] == 'active':
+                session.clear()
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['role'] = 'user'  # Students have user role
+                session['user_type'] = user['user_type']
+                session['institution_id'] = institution['id']
+                session['institution_name'] = institution['name']
+                session.permanent = True
+                
+                cursor.execute('UPDATE users SET last_active = %s WHERE id = %s',
+                              (datetime.now(), user['id']))
+                conn.commit()
+                
+                logger.info(f"Institution student {username} logged in")
+                return redirect(url_for('user_dashboard'))
+            else:
+                flash('Invalid credentials or inactive account', 'danger')
+        except mysql.connector.Error as err:
+            logger.error(f"Database error during student login: {str(err)}")
+            flash('An error occurred during login. Please try again.', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('student_login.html', form=form)
+
+@app.route('/register_student', methods=['GET', 'POST'])
+def register_student():
+    form = StudentRegisterForm()
+    if form.validate_on_submit():
+        username = sanitize_input(form.username.data)
+        email = sanitize_input(form.email.data)
+        password = form.password.data
+        institution_code = sanitize_input(form.institution_code.data)
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Find the institution
+            cursor.execute('SELECT * FROM institutions WHERE institution_code = %s AND status = "active"', (institution_code,))
+            institution = cursor.fetchone()
+            
+            if not institution:
+                flash('Institution not found or not active. Please check your institution code.', 'danger')
+                return render_template('register_student.html', form=form)
+            
+            # Check if the institution has reached its user limit
+            cursor.execute('SELECT COUNT(*) as student_count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution['id'],))
+            student_count = cursor.fetchone()['student_count']
+            
+            if student_count >= institution['user_limit']:
+                flash('This institution has reached its student limit. Please contact your institution administrator.', 'danger')
+                return render_template('register_student.html', form=form)
+            
+            # Check if username already exists
+            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+            if cursor.fetchone():
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return render_template('register_student.html', form=form)
+            
+            # Create the student user
+            hashed_password = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users 
+                (username, email, password, role, status, user_type, institution_id, last_active) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (username, email, hashed_password, 'user', 'active', 'institution_student', institution['id'], datetime.now()))
+            
+            conn.commit()
+            flash('Registration successful! You can now log in as a student.', 'success')
+            logger.info(f"New student registered: {username} for institution {institution['name']}")
+            return redirect(url_for('student_login'))
+            
+        except mysql.connector.Error as err:
+            conn.rollback()
+            logger.error(f"Database error during student registration: {str(err)}")
+            flash('An error occurred during registration. Please try again.', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('register_student.html', form=form)
+
+@app.route('/institution_dashboard')
+@login_required
+def institution_dashboard():
+    if session.get('user_type') != 'institution_admin':
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    
+    institution_id = session.get('institution_id')
+    if not institution_id:
+        flash('Institution not found.', 'danger')
+        return redirect(url_for('index'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Get institution info
+        cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
+        institution = cursor.fetchone()
+        
+        # Get subscription plan info
+        cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (institution['subscription_plan_id'],))
+        subscription = cursor.fetchone()
+        
+        # Get students count
+        cursor.execute('SELECT COUNT(*) as count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution_id,))
+        student_count = cursor.fetchone()['count']
+        
+        # Get active students (active in last 30 days)
+        cursor.execute('''
+            SELECT COUNT(*) as count 
+            FROM users 
+            WHERE institution_id = %s 
+            AND user_type = "institution_student" 
+            AND last_active > %s
+        ''', (institution_id, datetime.now() - timedelta(days=30)))
+        active_students = cursor.fetchone()['count']
+        
+        # Get recent quiz results for all students
+        cursor.execute('''
+            SELECT r.*, u.username 
+            FROM results r 
+            JOIN users u ON r.user_id = u.id 
+            WHERE u.institution_id = %s 
+            ORDER BY r.date_taken DESC 
+            LIMIT 10
+        ''', (institution_id,))
+        recent_results = cursor.fetchall()
+        
+        # Get average scores by student
+        cursor.execute('''
+            SELECT u.username, AVG(r.score / r.total_questions * 100) as avg_score, COUNT(r.id) as quiz_count
+            FROM users u
+            LEFT JOIN results r ON u.id = r.user_id
+            WHERE u.institution_id = %s 
+            AND u.user_type = "institution_student"
+            GROUP BY u.id
+            ORDER BY avg_score DESC
+        ''', (institution_id,))
+        student_performance = cursor.fetchall()
+        
+        # Get all students for management
+        cursor.execute('''
+            SELECT u.*, 
+                   COUNT(DISTINCT r.id) as quiz_count,
+                   AVG(r.score / r.total_questions * 100) as avg_score
+            FROM users u
+            LEFT JOIN results r ON u.id = r.user_id
+            WHERE u.institution_id = %s 
+            AND u.user_type = "institution_student"
+            GROUP BY u.id
+            ORDER BY u.username
+        ''', (institution_id,))
+        students = cursor.fetchall()
+        
+        # Format the scores and dates
+        for student in student_performance:
+            student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] else 0
+        
+        for student in students:
+            student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] else 0
+            if student['last_active']:
+                now = datetime.now()
+                diff = now - student['last_active']
+                if diff.days > 0:
+                    student['last_active_str'] = f"{diff.days} days ago"
+                elif diff.seconds >= 3600:
+                    student['last_active_str'] = f"{diff.seconds // 3600} hours ago"
+                elif diff.seconds >= 60:
+                    student['last_active_str'] = f"{diff.seconds // 60} minutes ago"
+                else:
+                    student['last_active_str'] = "Just now"
+            else:
+                student['last_active_str'] = "Never"
+        
+    except mysql.connector.Error as err:
+        logger.error(f"Database error in institution dashboard: {str(err)}")
+        flash('Error retrieving dashboard data.', 'danger')
+        return redirect(url_for('index'))
+    finally:
+        cursor.close()
+        conn.close()
+
+    form = AddStudentForm()
+
+    return render_template('institution_dashboard.html',
+                          institution=institution,
+                          subscription=subscription,
+                          student_count=student_count,
+                          active_students=active_students,
+                          recent_results=recent_results,
+                          student_performance=student_performance,
+                          students=students,
+                          remaining_slots=institution['user_limit'] - student_count,
+                          form=form)  # Pass the form to the template
+
+@app.route('/add_student', methods=['GET', 'POST'])
+@login_required
+def add_student():
+    if session.get('user_type') != 'institution_admin':
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    
+    institution_id = session.get('institution_id')
+    
+    form = AddStudentForm()
+    if form.validate_on_submit():
+        username = sanitize_input(form.username.data)
+        email = sanitize_input(form.email.data)
+        password = form.password.data
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Check if the institution has reached its user limit
+            cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
+            institution = cursor.fetchone()
+            
+            cursor.execute('SELECT COUNT(*) as student_count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution_id,))
+            student_count = cursor.fetchone()['student_count']
+            
+            if student_count >= institution['user_limit']:
+                flash('You have reached your student limit. Please upgrade your subscription to add more students.', 'danger')
+                return redirect(url_for('institution_dashboard'))
+            
+            # Check if username already exists
+            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+            if cursor.fetchone():
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return render_template('add_student.html', form=form)
+            
+            # Create the student user
+            hashed_password = generate_password_hash(password)
+            cursor.execute('''
+                INSERT INTO users 
+                (username, email, password, role, status, user_type, institution_id, last_active) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ''', (username, email, hashed_password, 'user', 'active', 'institution_student', institution_id, datetime.now()))
+            
+            conn.commit()
+            flash(f'Student {username} added successfully.', 'success')
+            logger.info(f"New student {username} added to institution {institution['name']}")
+            return redirect(url_for('institution_dashboard'))
+            
+        except mysql.connector.Error as err:
+            conn.rollback()
+            logger.error(f"Database error adding student: {str(err)}")
+            flash('An error occurred adding the student. Please try again.', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('add_student.html', form=form)
+
+@app.route('/remove_student/<int:student_id>', methods=['POST'])
+@login_required
+def remove_student(student_id):
+    if session.get('user_type') != 'institution_admin':
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    
+    institution_id = session.get('institution_id')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Verify the student belongs to this institution
+        cursor.execute('''
+            SELECT * FROM users 
+            WHERE id = %s AND institution_id = %s AND user_type = "institution_student"
+        ''', (student_id, institution_id))
+        student = cursor.fetchone()
+        
+        if not student:
+            flash('Student not found or does not belong to your institution.', 'danger')
+            return redirect(url_for('institution_dashboard'))
+        
+        # Delete the student
+        cursor.execute('DELETE FROM users WHERE id = %s', (student_id,))
+        conn.commit()
+        
+        flash('Student removed successfully.', 'success')
+        logger.info(f"Student {student['username']} removed from institution {session['institution_name']}")
+        
+    except mysql.connector.Error as err:
+        conn.rollback()
+        logger.error(f"Database error removing student: {str(err)}")
+        flash('An error occurred removing the student. Please try again.', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('institution_dashboard'))
+
+@app.route('/export_institution_data/<format>')
+@login_required
+def export_institution_data(format):
+    if session.get('user_type') != 'institution_admin':
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('index'))
+    
+    if format not in ['csv', 'pdf']:
+        flash('Unsupported export format.', 'danger')
+        return redirect(url_for('institution_dashboard'))
+    
+    institution_id = session.get('institution_id')
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Get student performance data
+        cursor.execute('''
+            SELECT 
+                u.id, 
+                u.username, 
+                u.email,
+                COUNT(r.id) as quizzes_taken,
+                AVG(r.score) as avg_score,
+                AVG(r.score / r.total_questions * 100) as avg_percentage,
+                MAX(r.score / r.total_questions * 100) as highest_percentage,
+                MIN(r.score / r.total_questions * 100) as lowest_percentage,
+                AVG(r.time_taken) as avg_time,
+                MAX(r.date_taken) as last_quiz_date,
+                u.last_active
+            FROM users u
+            LEFT JOIN results r ON u.id = r.user_id
+            WHERE u.institution_id = %s 
+            AND u.user_type = "institution_student"
+            GROUP BY u.id
+            ORDER BY u.username
+        ''', (institution_id,))
+        student_data = cursor.fetchall()
+        
+        if format == 'csv':
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow([
+                'Student ID', 'Username', 'Email', 'Quizzes Taken', 
+                'Average Score', 'Average Percentage', 'Highest Percentage', 
+                'Lowest Percentage', 'Average Time (seconds)', 
+                'Last Quiz Date', 'Last Active'
+            ])
+            
+            # Write data
+            for student in student_data:
+                writer.writerow([
+                    student['id'],
+                    student['username'],
+                    student['email'],
+                    student['quizzes_taken'],
+                    round(student['avg_score'], 2) if student['avg_score'] else 0,
+                    round(student['avg_percentage'], 2) if student['avg_percentage'] else 0,
+                    round(student['highest_percentage'], 2) if student['highest_percentage'] else 0,
+                    round(student['lowest_percentage'], 2) if student['lowest_percentage'] else 0,
+                    round(student['avg_time'], 2) if student['avg_time'] else 0,
+                    student['last_quiz_date'].strftime('%Y-%m-%d %H:%M:%S') if student['last_quiz_date'] else 'Never',
+                    student['last_active'].strftime('%Y-%m-%d %H:%M:%S') if student['last_active'] else 'Never'
+                ])
+            
+            return Response(
+                output.getvalue(),
+                mimetype='text/csv',
+                headers={'Content-Disposition': f'attachment; filename=institution_performance_{session["institution_name"]}_{datetime.now().strftime("%Y%m%d")}.csv'}
+            )
+        else:  # pdf
+            flash('PDF export functionality is coming soon.', 'info')
+            return redirect(url_for('institution_dashboard'))
+            
+    except mysql.connector.Error as err:
+        logger.error(f"Database error during export: {str(err)}")
+        flash('Error exporting data. Please try again.', 'danger')
+        return redirect(url_for('institution_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/register', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")

@@ -71,3 +71,78 @@
 2025-03-21 17:47:21,825 - __main__ - INFO - Quiz completed by pytestuser1, score: 2/3
 2025-03-21 17:47:37,986 - __main__ - INFO - User pytestuser1 logged out
 2025-03-21 17:47:40,850 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-21 20:25:43,371 - __main__ - INFO - Database initialized successfully
+2025-03-21 20:25:43,371 - werkzeug - INFO -  * Restarting with stat
+2025-03-21 20:25:44,431 - __main__ - INFO - Database initialized successfully
+2025-03-21 20:25:44,432 - werkzeug - WARNING -  * Debugger is active!
+2025-03-21 20:25:44,436 - werkzeug - INFO -  * Debugger PIN: 586-721-726
+2025-03-21 20:26:01,807 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-21 20:26:01,807 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-21 20:26:01,809 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-21 20:26:02,885 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-21 20:27:31,172 - __main__ - INFO - Quiz completed by pytestuser1, score: 2/10
+2025-03-21 20:29:46,049 - __main__ - INFO - User pytestuser1 logged out
+2025-03-21 20:29:54,263 - __main__ - INFO - User admin logged in successfully
+2025-03-21 20:37:47,280 - __main__ - INFO - User admin logged out
+2025-03-21 20:37:52,742 - __main__ - INFO - User pytestuser1 logged in successfully
+2025-03-22 09:07:25,391 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:07:25,399 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:07:26,332 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:07:26,332 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 09:07:26,335 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 09:31:27,152 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 09:31:27,303 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:32:55,749 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:32:55,749 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:32:56,749 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:32:56,750 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 09:32:56,752 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 09:33:52,786 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\test_env.py', reloading
+2025-03-22 09:33:52,924 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:33:54,089 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:33:54,089 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 09:33:54,092 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 09:49:07,898 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 09:49:07,898 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 09:49:07,901 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 09:49:08,670 - __main__ - INFO - New user registered: institution1
+2025-03-22 09:49:21,394 - __main__ - INFO - User institution1 logged in successfully
+2025-03-22 09:49:31,816 - __main__ - INFO - User institution1 logged out
+2025-03-22 09:53:29,132 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:53:29,133 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:53:30,188 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:53:30,188 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 09:53:30,191 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 09:53:37,161 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 09:53:37,162 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 09:53:37,164 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 09:56:20,336 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:56:20,336 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 09:56:21,351 - __main__ - INFO - Database initialized successfully
+2025-03-22 09:56:21,354 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 09:56:21,354 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 09:56:32,974 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 09:56:32,974 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 09:56:32,976 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 10:02:43,637 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 10:02:43,902 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:02:45,043 - __main__ - INFO - Database initialized successfully
+2025-03-22 10:02:45,043 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:02:45,045 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:02:52,528 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 10:02:52,528 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 10:02:52,529 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 10:02:53,276 - __main__ - ERROR - Database error during institution registration: Transaction already in progress
+2025-03-22 10:03:51,679 - __main__ - ERROR - Database error during institution registration: Transaction already in progress
+2025-03-22 10:06:14,813 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 10:06:14,949 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 10:06:16,090 - __main__ - INFO - Database initialized successfully
+2025-03-22 10:06:16,091 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 10:06:16,096 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 10:08:46,956 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 10:08:46,956 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 10:08:46,956 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 10:08:48,046 - __main__ - INFO - New institution registered: ABC INSTITUTE
+2025-03-22 10:10:15,118 - __main__ - INFO - Institution admin admin@abc logged in
+2025-03-22 10:13:41,678 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 10:13:41,841 - werkzeug - INFO -  * Restarting with stat
