@@ -1631,41 +1631,147 @@ def edit_user(user_id):
 @app.route('/manage_users')
 @super_admin_required
 def manage_users():
-    conn = get_db_connection()
-    if conn is None:
-        flash('Database connection error.', 'danger')
-        return redirect(url_for('admin_dashboard'))
+    user_type = request.args.get('type', 'all')
+    parent_id = request.args.get('parent_id', None)
     
+    conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     
     try:
-        cursor.execute('''SELECT u.*, 
-                   COUNT(DISTINCT r.id) as quiz_count,
-                   AVG(r.score / r.total_questions * 100) as avg_score
-            FROM users u
-            LEFT JOIN results r ON u.id = r.user_id
-            GROUP BY u.id
-            ORDER BY u.last_active DESC''')
-        users = cursor.fetchall()
+        if user_type == 'all':
+            # Show summary statistics for all user types
+            cursor.execute('''
+                SELECT 
+                    role,
+                    COUNT(*) as count,
+                    DATE_FORMAT(MAX(last_active), '%Y-%m-%d %H:%i') as last_active
+                FROM users
+                GROUP BY role
+                ORDER BY FIELD(role, 'super_admin', 'institute_admin', 'individual_user', 'student_user')
+            ''')
+            users = cursor.fetchall()
+            return render_template('manage_users.html', 
+                                   users=users, 
+                                   view_type="summary",
+                                   current_type="all")
         
-        for user in users:
-            user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else None
-            if user['last_active']:
-                now = datetime.now()
-                diff = now - user['last_active']
-                user['last_active_str'] = f"{diff.days} days ago" if diff.days > 0 else f"{diff.seconds // 3600} hours ago" if diff.seconds >= 3600 else f"{diff.seconds // 60} minutes ago" if diff.seconds >= 60 else "Just now"
+        elif user_type == 'institute_admin':
+            if parent_id:
+                # Show students for a specific institute admin
+                cursor.execute('''
+                    SELECT u.*, 
+                           COUNT(DISTINCT r.id) as quiz_count,
+                           AVG(r.score / r.total_questions * 100) as avg_score
+                    FROM users u
+                    LEFT JOIN results r ON u.id = r.user_id
+                    WHERE u.role = 'student_user' AND u.institution_id = %s
+                    GROUP BY u.id
+                    ORDER BY u.username
+                ''', (parent_id,))
+                users = cursor.fetchall()
+                
+                # Get institution name
+                cursor.execute('SELECT name FROM institutions WHERE id = %s', (parent_id,))
+                institution = cursor.fetchone()
+                institution_name = institution['name'] if institution else "Unknown Institution"
+                
+                # Format the scores and last active dates
+                for user in users:
+                    user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else 0
+                    if user['last_active']:
+                        user['last_active_str'] = format_last_active(user['last_active'])
+                    else:
+                        user['last_active_str'] = "Never"
+                
+                # Get institute admin details for breadcrumb
+                cursor.execute('SELECT username FROM users WHERE id = %s', (parent_id,))
+                admin = cursor.fetchone()
+                admin_name = admin['username'] if admin else "Unknown Admin"
+                
+                return render_template('manage_users.html', 
+                                    users=users, 
+                                    view_type="students",
+                                    current_type="student_user",
+                                    institution_name=institution_name,
+                                    admin_name=admin_name,
+                                    parent_id=parent_id)
             else:
-                user['last_active_str'] = "Never"
+                # Show all institute admins
+                cursor.execute('''
+                    SELECT u.*, i.name as institution_name,
+                           COUNT(s.id) as student_count
+                    FROM users u
+                    LEFT JOIN institutions i ON u.institution_id = i.id
+                    LEFT JOIN users s ON s.institution_id = i.id AND s.role = 'student_user'
+                    WHERE u.role = 'institute_admin'
+                    GROUP BY u.id
+                    ORDER BY u.username
+                ''')
+                users = cursor.fetchall()
+                
+                # Format last active dates
+                for user in users:
+                    if user['last_active']:
+                        user['last_active_str'] = format_last_active(user['last_active'])
+                    else:
+                        user['last_active_str'] = "Never"
+                
+                return render_template('manage_users.html', 
+                                    users=users, 
+                                    view_type="institute_admins",
+                                    current_type="institute_admin")
+        
+        elif user_type in ['individual_user', 'student_user', 'super_admin']:
+            # Show users of the specific type
+            cursor.execute('''
+                SELECT u.*, 
+                       COUNT(DISTINCT r.id) as quiz_count,
+                       AVG(r.score / r.total_questions * 100) as avg_score,
+                       i.name as institution_name
+                FROM users u
+                LEFT JOIN results r ON u.id = r.user_id
+                LEFT JOIN institutions i ON u.institution_id = i.id
+                WHERE u.role = %s
+                GROUP BY u.id
+                ORDER BY u.username
+            ''', (user_type,))
+            users = cursor.fetchall()
+            
+            # Format the scores and last active dates
+            for user in users:
+                user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else 0
+                if user['last_active']:
+                    user['last_active_str'] = format_last_active(user['last_active'])
+                else:
+                    user['last_active_str'] = "Never"
+            
+            return render_template('manage_users.html', 
+                                users=users, 
+                                view_type="users",
+                                current_type=user_type)
     
     except mysql.connector.Error as err:
         logger.error(f"Database error in manage_users: {str(err)}")
         flash('Error retrieving user data.', 'danger')
-        users = []
+        return redirect(url_for('admin_dashboard'))
     finally:
         cursor.close()
         conn.close()
+
+def format_last_active(last_active):
+    """Format the last active time to a readable string"""
+    now = datetime.now()
+    diff = now - last_active
+    if diff.days > 0:
+        return f"{diff.days} days ago"
+    elif diff.seconds >= 3600:
+        return f"{diff.seconds // 3600} hours ago"
+    elif diff.seconds >= 60:
+        return f"{diff.seconds // 60} minutes ago"
+    else:
+        return "Just now"
     
-    return render_template('manage_users.html', users=users)
+
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @super_admin_required

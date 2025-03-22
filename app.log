@@ -196,3 +196,22 @@
 2025-03-22 11:17:38,315 - __main__ - INFO - User admin@abc logged in successfully
 2025-03-22 11:18:05,749 - __main__ - INFO - User admin@abc logged out
 2025-03-22 11:28:48,899 - __main__ - INFO - User admin logged in successfully
+2025-03-22 11:40:57,924 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 11:40:58,054 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 11:40:59,446 - __main__ - INFO - Database initialized successfully
+2025-03-22 11:40:59,446 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 11:40:59,463 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 11:41:26,239 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 11:41:26,239 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 11:41:26,241 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 11:41:59,045 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 11:41:59,198 - werkzeug - INFO -  * Restarting with stat
+2025-03-22 11:42:00,256 - __main__ - INFO - Database initialized successfully
+2025-03-22 11:42:00,256 - werkzeug - WARNING -  * Debugger is active!
+2025-03-22 11:42:00,261 - werkzeug - INFO -  * Debugger PIN: 852-732-347
+2025-03-22 11:42:04,288 - mysql.connector - INFO - package: mysql.connector.plugins
+2025-03-22 11:42:04,288 - mysql.connector - INFO - plugin_name: caching_sha2_password
+2025-03-22 11:42:04,293 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-03-22 11:46:00,768 - __main__ - INFO - User 5 deleted by super_admin admin
+2025-03-22 11:47:54,085 - werkzeug - INFO -  * Detected change in 'c:\\Users\\sksat\\OneDrive\\Desktop\\Project 2.0\\pharmacy_exam - Copy\\app.py', reloading
+2025-03-22 11:47:54,203 - werkzeug - INFO -  * Restarting with stat
