@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="description" content="Pharmacy Exam Prep - Study platform for pharmacy exams">
-    {% if csrf_token %}
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% if csrf_token()|length > 0 %}
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% else %}
+        <!-- Log a warning in development when token is missing -->
+        <script>console.warn('CSRF token not available in template');</script>
     {% endif %}
     <title>Pharmacy Exam Prep{% if title %} - {{ title }}{% endif %}</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
@@ -15,7 +18,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
-<body class="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+<body>
     <nav class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-2">
@@ -41,6 +44,7 @@
                     {% elif session.role == 'individual_user' %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('user_dashboard') %}bg-blue-500{% endif %}">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
+                        <a href="{{ url_for('subscriptions') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('subscriptions') %}bg-blue-500{% endif %}">Subscriptions</a>
                     {% elif session.role == 'student_user' %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('user_dashboard') %}bg-blue-500{% endif %}">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
@@ -80,7 +84,8 @@
                             </svg>
                         </button>
                         <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 dropdown-menu hidden">
-                            <a href="{{ url_for('register') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Individual User</a>
+                            <a href="{{ url_for('register') }}" class="block px-4 py-2 text-sm text-gray-7
+00 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Individual User</a>
                             <a href="{{ url_for('register_institution') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Institution</a>
                             <a href="{{ url_for('register_student') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Student</a>
                         </div>
@@ -89,7 +94,7 @@
             </div>
         </div>
     </nav>
-    
+
     <div class="md:hidden bg-blue-700 text-white">
         <div class="container mx-auto p-2">
             <div class="flex justify-center space-x-3 text-sm overflow-x-auto">
@@ -106,6 +111,9 @@
                     {% elif session.role in ['individual_user', 'student_user'] %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Quiz</a>
+                        {% if session.role == 'individual_user' %}
+                            <a href="{{ url_for('subscriptions') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Subscriptions</a>
+                        {% endif %}
                     {% endif %}
                 {% else %}
                     <a href="{{ url_for('choose_login') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Login</a>
@@ -115,7 +123,27 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Update the login form in the base template to ensure CSRF inclusion -->
+    {% if not session.username %}
+    <form method="POST" action="{{ url_for('login') }}" id="login-form" style="display: none;">
+        {% if csrf_token()|length > 0 %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% endif %}
+        <!-- Other form fields would go here -->
+    </form>
+    {% endif %}
+
+    <!-- Add session status indicator for debugging (only visible to admins) -->
+    {% if session.role == 'super_admin' %}
+    <div class="hidden md:block fixed bottom-0 right-0 bg-gray-800 text-white text-xs p-1 opacity-50 hover:opacity-100">
+        Session: {{ session.username }} ({{ session.role }})
+        {% if session.institution_id %}
+        | Inst: {{ session.institution_name }}
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="flash-messages">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -159,30 +187,21 @@
         } else {
             document.documentElement.classList.remove('dark');
         }
-        
-        // Handle dropdown menus
+
         document.addEventListener('DOMContentLoaded', function() {
-            const dropdowns = document.querySelectorAll('.dropdown');
+            // Check for CSRF token in meta
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (!csrfMeta || !csrfMeta.content) {
+                console.error('CSRF token is missing or empty in meta tag');
+            } else {
+                console.log('CSRF token loaded: ' + csrfMeta.content.substring(0, 10) + '...');
+            }
             
-            dropdowns.forEach(dropdown => {
-                const button = dropdown.querySelector('button');
-                const menu = dropdown.querySelector('.dropdown-menu');
-                
-                if (button && menu) {
-                    button.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        menu.classList.toggle('hidden');
-                    });
-                    
-                    // Close dropdown when clicking outside
-                    document.addEventListener('click', () => {
-                        menu.classList.add('hidden');
-                    });
-                    
-                    // Prevent clicks inside dropdown from closing it
-                    menu.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                    });
+            // Check forms for CSRF tokens
+            document.querySelectorAll('form').forEach(form => {
+                const csrfInput = form.querySelector('input[name="csrf_token"]');
+                if (!csrfInput) {
+                    console.warn('Form missing CSRF token:', form);
                 }
             });
         });

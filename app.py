@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from flask_socketio import SocketIO
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 import csv
 from io import StringIO
 import json
@@ -24,16 +24,18 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', os.urandom(24).hex())
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'my-static-secret-key-12345')  # Static key for development
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Changed to DEBUG for more detail
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(), logging.FileHandler('app.log')]
 )
@@ -60,7 +62,7 @@ def get_db_connection():
     try:
         if connection_pool is None:
             connection_pool = pooling.MySQLConnectionPool(**db_config)
-            logger.debug(f"Created DB connection pool")
+            logger.debug("Created DB connection pool")
         conn = connection_pool.get_connection()
         if conn.is_connected():
             logger.debug("Database connection established successfully")
@@ -90,13 +92,14 @@ def sanitize_input(text):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        logger.debug(f"Session in login_required: {session}")
         if 'username' not in session:
+            logger.warning(f"Access to {request.path} rejected - user not logged in")
             flash('Please log in to access this page.', 'warning')
             return redirect(url_for('choose_login'))
         return f(*args, **kwargs)
     return decorated_function
 
-# For super_admin only routes (full access to everything)
 def super_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -106,17 +109,32 @@ def super_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# For institute_admin only routes (student management but not question management)
 def institute_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session or session.get('role') != 'institute_admin':
-            flash('Institute admin privileges required.', 'danger')
+        logger.debug(f"Session in institute_admin_required: {session}")
+        if 'username' not in session:
+            logger.warning(f"Access to {request.path} rejected - user not logged in")
+            flash('Please log in to access this page.', 'warning')
             return redirect(url_for('choose_login'))
+            
+        if session.get('role') != 'institute_admin':
+            logger.warning(f"Access to {request.path} rejected - user {session.get('username')} is not an institute_admin")
+            flash('Institute admin privileges required.', 'danger')
+            # Redirect to an appropriate page based on role
+            if session.get('role') in ['individual_user', 'student_user']:
+                return redirect(url_for('user_dashboard'))
+            return redirect(url_for('choose_login'))
+            
+        if not session.get('institution_id'):
+            logger.error(f"institute_admin missing institution_id: {session}")
+            flash('Institution not found. Please log in again.', 'danger')
+            session.clear()
+            return redirect(url_for('choose_login'))
+            
         return f(*args, **kwargs)
     return decorated_function
 
-# For individual_user or student_user (quiz access only)
 def quiz_access_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -126,7 +144,6 @@ def quiz_access_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# For any type of admin access (institute_admin OR super_admin)
 def any_admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -135,6 +152,7 @@ def any_admin_required(f):
             return redirect(url_for('choose_login'))
         return f(*args, **kwargs)
     return decorated_function
+
 
 # Forms
 class LoginForm(FlaskForm):
@@ -205,6 +223,14 @@ class AddStudentForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Regexp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', message='Invalid email address')])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6, max=50)])
     submit = SubmitField('Add Student')
+
+class SubscriptionForm(FlaskForm):
+    plan_id = RadioField('Plan', coerce=int, validators=[DataRequired()])
+    payment_method = SelectField('Payment Method', 
+                                choices=[('credit_card', 'Credit Card'), 
+                                        ('paypal', 'PayPal')],
+                                validators=[DataRequired()])
+    submit = SubmitField('Subscribe Now')
 
 # Database Initialization
 def init_db():
@@ -303,14 +329,41 @@ def init_db():
 # Routes
 @app.route('/')
 def index():
+    """
+    Main index route with improved redirect handling and debug logging
+    """
+    logger.debug(f"Session data: {session}")
+    
     if 'username' in session:
-        if session['role'] == 'super_admin':
+        role = session.get('role')
+        
+        # Check if role is valid to avoid redirect loops
+        if role not in ['super_admin', 'institute_admin', 'individual_user', 'student_user']:
+            logger.error(f"Invalid role in session: {role}")
+            session.clear()
+            flash('Invalid user role. Please log in again.', 'danger')
+            return redirect(url_for('choose_login'))
+            
+        if role == 'super_admin':
             return redirect(url_for('admin_dashboard'))
-        elif session['role'] == 'institute_admin':
+        elif role == 'institute_admin':
             return redirect(url_for('institution_dashboard'))
         else:
             return redirect(url_for('user_dashboard'))
+    
     return redirect(url_for('choose_login'))
+
+@app.route('/ping')
+def ping():
+    """
+    Endpoint to check if the user session is still valid
+    Returns JSON with authentication status
+    """
+    is_authenticated = 'username' in session
+    return jsonify({
+        'authenticated': is_authenticated,
+        'timestamp': datetime.now().isoformat()
+    })
 
 @app.route('/choose_login', methods=['GET', 'POST'])
 def choose_login():
@@ -320,7 +373,7 @@ def choose_login():
         if login_type == 'individual':
             return redirect(url_for('login'))
         elif login_type == 'institution':
-            return redirect(url_for('institution_login'))
+            return redirect(url_for('institution_login'))  # This is causing the error
         else:  # login_type == 'student'
             return redirect(url_for('student_login'))
     return render_template('choose_login.html', form=form)
@@ -426,7 +479,7 @@ def institution_login():
             cursor.execute('''SELECT * FROM users 
                 WHERE username = %s 
                 AND institution_id = %s 
-                AND user_type = 'institution_admin' ''',
+                AND role = 'institute_admin' ''',
                 (username, institution['id']))
             user = cursor.fetchone()
             
@@ -435,7 +488,6 @@ def institution_login():
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 session['role'] = 'institute_admin'
-                session['user_type'] = user['user_type']
                 session['institution_id'] = institution['id']
                 session['institution_name'] = institution['name']
                 session.permanent = True
@@ -456,6 +508,100 @@ def institution_login():
             conn.close()
     
     return render_template('institution_login.html', form=form)
+
+@app.route('/institution_dashboard')
+@institute_admin_required
+def institution_dashboard():
+    logger.debug(f"institution_dashboard - Session: {session}")
+    
+    institution_id = session.get('institution_id')
+    if not institution_id:
+        logger.error(f"Missing institution_id in session for user {session.get('username')}")
+        flash('Institution not found. Please log in again.', 'danger')
+        session.clear()
+        return redirect(url_for('choose_login'))
+    
+    conn = get_db_connection()
+    if conn is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('index'))
+        
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Get institution details
+        cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
+        institution = cursor.fetchone()
+        
+        if not institution:
+            logger.error(f"Institution {institution_id} not found in database")
+            flash('Institution not found.', 'danger')
+            session.clear()
+            return redirect(url_for('choose_login'))
+        
+        # Get subscription details
+        cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (institution['subscription_plan_id'],))
+        subscription = cursor.fetchone()
+        
+        # Get student count
+        cursor.execute('SELECT COUNT(*) as count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution_id,))
+        student_count = cursor.fetchone()['count']
+        
+        # Get active students (example definition - modify as needed)
+        cursor.execute('''SELECT COUNT(*) as count 
+                         FROM users 
+                         WHERE institution_id = %s 
+                         AND user_type = "institution_student" 
+                         AND last_active > %s''', 
+                      (institution_id, datetime.now() - timedelta(days=30)))
+        active_students = cursor.fetchone()['count']
+        
+        # Get recent results (example definition - modify as needed)
+        cursor.execute('''SELECT r.* 
+                         FROM results r 
+                         JOIN users u ON r.user_id = u.id 
+                         WHERE u.institution_id = %s 
+                         ORDER BY r.date_taken DESC 
+                         LIMIT 5''', 
+                      (institution_id,))
+        recent_results = cursor.fetchall()
+        
+        # Get student performance (example definition - modify as needed)
+        cursor.execute('''SELECT AVG(score) as avg_score 
+                         FROM results r 
+                         JOIN users u ON r.user_id = u.id 
+                         WHERE u.institution_id = %s''', 
+                      (institution_id,))
+        student_performance = cursor.fetchone()['avg_score'] or 0
+        
+        # Get students list
+        cursor.execute('''SELECT * 
+                         FROM users 
+                         WHERE institution_id = %s 
+                         AND user_type = "institution_student" 
+                         ORDER BY username''', 
+                      (institution_id,))
+        students = cursor.fetchall()
+        
+    except mysql.connector.Error as err:
+        logger.error(f"Database error in institution dashboard: {str(err)}")
+        flash('Error retrieving dashboard data.', 'danger')
+        return redirect(url_for('index'))
+    finally:
+        cursor.close()
+        conn.close()
+
+    form = AddStudentForm()
+    return render_template('institution_dashboard.html',
+                          institution=institution,
+                          subscription=subscription,
+                          student_count=student_count,
+                          active_students=active_students,
+                          recent_results=recent_results,
+                          student_performance=student_performance,
+                          students=students,
+                          remaining_slots=institution['user_limit'] - student_count,
+                          form=form)
 
 @app.route('/student_login', methods=['GET', 'POST'])
 def student_login():
@@ -563,98 +709,13 @@ def register_student():
     
     return render_template('register_student.html', form=form)
 
-@app.route('/institution_dashboard')
-@institute_admin_required
-def institution_dashboard():
-    institution_id = session.get('institution_id')
-    if not institution_id:
-        flash('Institution not found.', 'danger')
-        return redirect(url_for('index'))
-    
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        cursor.execute('SELECT * FROM institutions WHERE id = %s', (institution_id,))
-        institution = cursor.fetchone()
-        
-        cursor.execute('SELECT * FROM subscription_plans WHERE id = %s', (institution['subscription_plan_id'],))
-        subscription = cursor.fetchone()
-        
-        cursor.execute('SELECT COUNT(*) as count FROM users WHERE institution_id = %s AND user_type = "institution_student"', (institution_id,))
-        student_count = cursor.fetchone()['count']
-        
-        cursor.execute('''SELECT COUNT(*) as count 
-            FROM users 
-            WHERE institution_id = %s 
-            AND user_type = "institution_student" 
-            AND last_active > %s''',
-            (institution_id, datetime.now() - timedelta(days=30)))
-        active_students = cursor.fetchone()['count']
-        
-        cursor.execute('''SELECT r.*, u.username 
-            FROM results r 
-            JOIN users u ON r.user_id = u.id 
-            WHERE u.institution_id = %s 
-            ORDER BY r.date_taken DESC 
-            LIMIT 10''',
-            (institution_id,))
-        recent_results = cursor.fetchall()
-        
-        cursor.execute('''SELECT u.username, AVG(r.score / r.total_questions * 100) as avg_score, COUNT(r.id) as quiz_count
-            FROM users u
-            LEFT JOIN results r ON u.id = r.user_id
-            WHERE u.institution_id = %s 
-            AND u.user_type = "institution_student"
-            GROUP BY u.id
-            ORDER BY avg_score DESC''',
-            (institution_id,))
-        student_performance = cursor.fetchall()
-        
-        cursor.execute('''SELECT u.*, 
-                   COUNT(DISTINCT r.id) as quiz_count,
-                   AVG(r.score / r.total_questions * 100) as avg_score
-            FROM users u
-            LEFT JOIN results r ON u.id = r.user_id
-            WHERE u.institution_id = %s 
-            AND u.user_type = "institution_student"
-            GROUP BY u.id
-            ORDER BY u.username''',
-            (institution_id,))
-        students = cursor.fetchall()
-        
-        for student in student_performance:
-            student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] else 0
-        
-        for student in students:
-            student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] else 0
-            if student['last_active']:
-                now = datetime.now()
-                diff = now - student['last_active']
-                student['last_active_str'] = f"{diff.days} days ago" if diff.days > 0 else f"{diff.seconds // 3600} hours ago" if diff.seconds >= 3600 else f"{diff.seconds // 60} minutes ago" if diff.seconds >= 60 else "Just now"
-            else:
-                student['last_active_str'] = "Never"
-        
-    except mysql.connector.Error as err:
-        logger.error(f"Database error in institution dashboard: {str(err)}")
-        flash('Error retrieving dashboard data.', 'danger')
-        return redirect(url_for('index'))
-    finally:
-        cursor.close()
-        conn.close()
 
-    form = AddStudentForm()
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    logger.error(f"CSRF error: {e}")
+    flash("CSRF token validation failed. Please try again.", "danger")
+    return render_template('csrf_error.html', reason=e.description), 400
 
-    return render_template('institution_dashboard.html',
-                          institution=institution,
-                          subscription=subscription,
-                          student_count=student_count,
-                          active_students=active_students,
-                          recent_results=recent_results,
-                          student_performance=student_performance,
-                          students=students,
-                          remaining_slots=institution['user_limit'] - student_count,
-                          form=form)
 
 @app.route('/add_student', methods=['GET', 'POST'])
 @institute_admin_required
@@ -855,54 +916,85 @@ def register():
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
+#@limiter.limit("10 per minute")  # Temporarily disabled for testing
 def login():
     if 'username' in session:
+        logger.debug("User already logged in, redirecting to index")
         return redirect(url_for('index'))
         
     form = LoginForm()
-    if form.validate_on_submit():
-        username = sanitize_input(form.username.data)
-        password = form.password.data
+    logger.debug(f"Generated CSRF Token on GET: {form.csrf_token.data}")
+    
+    if request.method == 'POST':
+        received_token = request.form.get('csrf_token')
+        logger.debug(f"Received CSRF Token on POST: {received_token}")
+        logger.debug(f"Full Form Data: {request.form}")
         
-        conn = get_db_connection()
-        if conn is None:
-            flash("Database connection error.", 'danger')
-            return redirect(url_for('login'))
+        # Extended validation for debugging
+        if not received_token:
+            logger.error("No CSRF token received in form data")
+            flash('CSRF token missing. Please try again.', 'danger')
+            return render_template('login.html', form=form)
             
-        cursor = conn.cursor(dictionary=True)
-        try:
-            cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
-            user = cursor.fetchone()
+        if form.validate_on_submit():
+            logger.info("Form validated successfully")
+            username = sanitize_input(form.username.data)
+            password = form.password.data
             
-            if user and check_password_hash(user['password'], password) and user['status'] == 'active':
-                session.clear()
-                session['user_id'] = user['id']
-                session['username'] = user['username']
-                session['role'] = user['role']
-                session.permanent = True
+            conn = get_db_connection()
+            if conn is None:
+                flash("Database connection error.", 'danger')
+                return redirect(url_for('login'))
                 
-                cursor.execute('UPDATE users SET last_active = %s WHERE id = %s',
-                              (datetime.now(), user['id']))
-                conn.commit()
+            cursor = conn.cursor(dictionary=True)
+            try:
+                cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
+                user = cursor.fetchone()
                 
-                logger.info(f"User {username} logged in successfully")
-                if user['role'] == 'super_admin':
-                    return redirect(url_for('admin_dashboard'))
-                elif user['role'] == 'institute_admin':
-                    return redirect(url_for('institution_dashboard'))
+                if user and check_password_hash(user['password'], password) and user['status'] == 'active':
+                    session.clear()
+                    session['user_id'] = user['id']
+                    session['username'] = user['username']
+                    session['role'] = user['role']
+                    session.permanent = True
+                    
+                    # Add institution data for relevant users
+                    if user.get('institution_id'):
+                        try:
+                            cursor.execute('SELECT id, name FROM institutions WHERE id = %s', (user['institution_id'],))
+                            institution = cursor.fetchone()
+                            if institution:
+                                session['institution_id'] = institution['id']
+                                session['institution_name'] = institution['name']
+                        except Exception as e:
+                            logger.error(f"Error fetching institution data: {str(e)}")
+                    
+                    cursor.execute('UPDATE users SET last_active = %s WHERE id = %s',
+                                  (datetime.now(), user['id']))
+                    conn.commit()
+                    
+                    logger.info(f"User {username} logged in successfully")
+                    if user['role'] == 'super_admin':
+                        return redirect(url_for('admin_dashboard'))
+                    elif user['role'] == 'institute_admin':
+                        return redirect(url_for('institution_dashboard'))
+                    else:
+                        return redirect(url_for('user_dashboard'))
                 else:
-                    return redirect(url_for('user_dashboard'))
-            else:
-                flash('Invalid credentials or inactive account', 'danger')
-                logger.warning(f"Failed login attempt for username: {username}")
-        except mysql.connector.Error as err:
-            logger.error(f"Database error during login: {str(err)}")
-            flash('An error occurred during login.', 'danger')
-        finally:
-            cursor.close()
-            conn.close()
-            
+                    flash('Invalid credentials or inactive account', 'danger')
+                    logger.warning(f"Failed login attempt for username: {username}")
+            except mysql.connector.Error as err:
+                logger.error(f"Database error during login: {str(err)}")
+                flash('An error occurred during login.', 'danger')
+            finally:
+                cursor.close()
+                conn.close()
+        else:
+            logger.debug(f"Form validation failed: {form.errors}")
+            if 'csrf_token' in form.errors:
+                logger.error(f"CSRF validation failed: {form.errors['csrf_token']}")
+                flash('CSRF validation failed. Please try again.', 'danger')
+    
     return render_template('login.html', form=form)
 
 @app.route('/logout')
@@ -936,23 +1028,49 @@ def user_dashboard():
         result = cursor.fetchone()
         total_questions = result['count'] if result and 'count' in result else 0
         
+        # Get user's subscription info
+        user_subscription = None
+        accessible_exams = []
+        
+        if session.get('role') == 'individual_user':
+            cursor.execute('''SELECT u.subscription_plan_id, u.subscription_start, u.subscription_end, p.name as plan_name
+                FROM users u
+                LEFT JOIN subscription_plans p ON u.subscription_plan_id = p.id
+                WHERE u.id = %s''', (session['user_id'],))
+            user_subscription = cursor.fetchone()
+            
+            if user_subscription and user_subscription['subscription_end'] and user_subscription['subscription_end'] > datetime.now():
+                cursor.execute('''SELECT exam_name FROM plan_exam_access
+                    WHERE plan_id = %s''', (user_subscription['subscription_plan_id'],))
+                accessible_exams = [row['exam_name'] for row in cursor.fetchall()]
+        
+        elif session.get('role') in ['student_user', 'super_admin', 'institute_admin']:
+            cursor.execute('SELECT DISTINCT exam_name FROM questions')
+            accessible_exams = [row['exam_name'] for row in cursor.fetchall()]
+            
         if session.get('role') == 'institute_admin':
             return redirect(url_for('institution_dashboard'))
         elif session.get('role') == 'super_admin':
             return redirect(url_for('admin_dashboard'))
+            
+        return render_template('user_dashboard.html', 
+                            results=recent_results, 
+                            total_questions=total_questions,
+                            role=session['role'],
+                            user_subscription=user_subscription,
+                            accessible_exams=accessible_exams)
     except mysql.connector.Error as err:
         logger.error(f"Database error in user dashboard: {str(err)}")
         flash('Error retrieving dashboard data.', 'danger')
-        recent_results = []
-        total_questions = 0
+        return render_template('user_dashboard.html', 
+                            results=[], 
+                            total_questions=0,
+                            role=session['role'],
+                            user_subscription=None,
+                            accessible_exams=[])
     finally:
         cursor.close()
         conn.close()
-        
-    return render_template('user_dashboard.html', 
-                          results=recent_results, 
-                          total_questions=total_questions,
-                          role=session['role'])
 
 @app.route('/export_user_dashboard/<format>')
 @login_required
@@ -1065,135 +1183,6 @@ def admin_dashboard():
                           total_quizzes=total_quizzes,
                           recent_activity=recent_activity,
                           now=now)
-
-@app.route('/quiz', methods=['GET', 'POST'])
-@quiz_access_required
-def quiz():
-    conn = get_db_connection()
-    if conn is None:
-        flash('Database connection error.', 'danger')
-        return redirect(url_for('user_dashboard'))
-        
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        cursor.execute('SELECT DISTINCT exam_name FROM questions')
-        exam_names = [row['exam_name'] for row in cursor.fetchall()]
-        
-        cursor.execute('SELECT DISTINCT year FROM questions ORDER BY year DESC')
-        years = [row['year'] for row in cursor.fetchall()]
-        
-        cursor.execute('SELECT DISTINCT subject FROM questions')
-        subjects = [row['subject'] for row in cursor.fetchall()]
-        
-        quiz_type = request.form.get('quiz_type', 'previous_year')
-        filters = {
-            'exam_name': sanitize_input(request.form.get('exam_name', '')),
-            'year': sanitize_input(request.form.get('year', '')),
-            'subject': sanitize_input(request.form.get('subject', '')),
-            'topics': sanitize_input(request.form.get('topics', ''))
-        }
-        
-        questions = []
-        
-        if request.method == 'POST':
-            if 'filter' in request.form or 'generate' in request.form:
-                query = 'SELECT * FROM questions WHERE 1=1'
-                params = []
-                
-                if quiz_type == 'previous_year':
-                    if filters['exam_name']:
-                        query += ' AND exam_name = %s'
-                        params.append(filters['exam_name'])
-                    if filters['year']:
-                        query += ' AND year = %s'
-                        params.append(int(filters['year']) if filters['year'].isdigit() else 0)
-                else:
-                    if filters['subject']:
-                        query += ' AND subject = %s'
-                        params.append(filters['subject'])
-                    if filters['topics']:
-                        topics = [t.strip() for t in filters['topics'].split(',')]
-                        placeholders = ', '.join(['%s'] * len(topics))
-                        query += f" AND (topics REGEXP CONCAT('(^|,)\\\\s*(', REPLACE(CONCAT({placeholders}), ',', '|'), ')\\\\s*(,|$)'))"
-                        params.extend(topics)
-                
-                difficulty = request.form.get('difficulty')
-                if difficulty in ['easy', 'medium', 'hard']:
-                    query += ' AND difficulty = %s'
-                    params.append(difficulty)
-                    
-                query += ' ORDER BY RAND() LIMIT 10'
-                
-                cursor.execute(query, params)
-                questions = cursor.fetchall()
-                
-                if not questions:
-                    flash('No questions found matching your criteria.', 'warning')
-                else:
-                    session['quiz_questions'] = [q['id'] for q in questions]
-                    session['quiz_started_at'] = datetime.now().timestamp()
-            
-            elif any(key.startswith('question_') for key in request.form):
-                if 'quiz_questions' not in session:
-                    flash('No active quiz found.', 'warning')
-                    return redirect(url_for('quiz'))
-                    
-                question_ids = session['quiz_questions']
-                
-                placeholders = ', '.join(['%s'] * len(question_ids))
-                cursor.execute(f'SELECT * FROM questions WHERE id IN ({placeholders})', question_ids)
-                questions_data = {q['id']: q for q in cursor.fetchall()}
-                
-                score = 0
-                answers = {}
-                
-                for qid in question_ids:
-                    user_answer = request.form.get(f'question_{qid}')
-                    if user_answer:
-                        answers[str(qid)] = user_answer
-                        if qid in questions_data and user_answer == questions_data[qid]['correct_answer']:
-                            score += 1
-                
-                start_time = session.get('quiz_started_at', 0)
-                time_taken = int(datetime.now().timestamp() - start_time) if start_time else 0
-                
-                cursor.execute('''INSERT INTO results 
-                    (user_id, score, total_questions, time_taken, answers, date_taken) 
-                    VALUES (%s, %s, %s, %s, %s, %s)''',
-                    (session['user_id'], score, len(question_ids), time_taken, json.dumps(answers), datetime.now()))
-                conn.commit()
-                result_id = cursor.lastrowid
-                
-                socketio.emit('new_result', {
-                    'username': session['username'],
-                    'score': score,
-                    'total': len(question_ids),
-                    'time_taken': time_taken
-                }, namespace='/admin')
-                
-                logger.info(f"Quiz completed by {session['username']}, score: {score}/{len(question_ids)}")
-                
-                session.pop('quiz_questions', None)
-                session.pop('quiz_started_at', None)
-                
-                flash(f'Quiz submitted successfully! Your score: {score}/{len(question_ids)}', 'success')
-                return redirect(url_for('results', result_id=result_id))
-    except mysql.connector.Error as err:
-        logger.error(f"Database error in quiz: {str(err)}")
-        flash('Error processing quiz data.', 'danger')
-        questions = []
-    finally:
-        cursor.close()
-        conn.close()
-    
-    return render_template('quiz.html',
-                          quiz_type=quiz_type,
-                          filters=filters,
-                          exam_names=exam_names,
-                          years=years,
-                          subjects=subjects,
-                          questions=questions)
 
 @app.route('/results')
 @login_required
@@ -1639,16 +1628,10 @@ def manage_users():
     
     try:
         if user_type == 'all':
-            # Show summary statistics for all user types
-            cursor.execute('''
-                SELECT 
-                    role,
-                    COUNT(*) as count,
-                    DATE_FORMAT(MAX(last_active), '%Y-%m-%d %H:%i') as last_active
+            cursor.execute('''SELECT role, COUNT(*) as count, DATE_FORMAT(MAX(last_active), '%Y-%m-%d %H:%i') as last_active
                 FROM users
                 GROUP BY role
-                ORDER BY FIELD(role, 'super_admin', 'institute_admin', 'individual_user', 'student_user')
-            ''')
+                ORDER BY FIELD(role, 'super_admin', 'institute_admin', 'individual_user', 'student_user')''')
             users = cursor.fetchall()
             return render_template('manage_users.html', 
                                    users=users, 
@@ -1657,25 +1640,20 @@ def manage_users():
         
         elif user_type == 'institute_admin':
             if parent_id:
-                # Show students for a specific institute admin
-                cursor.execute('''
-                    SELECT u.*, 
+                cursor.execute('''SELECT u.*, 
                            COUNT(DISTINCT r.id) as quiz_count,
                            AVG(r.score / r.total_questions * 100) as avg_score
                     FROM users u
                     LEFT JOIN results r ON u.id = r.user_id
                     WHERE u.role = 'student_user' AND u.institution_id = %s
                     GROUP BY u.id
-                    ORDER BY u.username
-                ''', (parent_id,))
+                    ORDER BY u.username''', (parent_id,))
                 users = cursor.fetchall()
                 
-                # Get institution name
                 cursor.execute('SELECT name FROM institutions WHERE id = %s', (parent_id,))
                 institution = cursor.fetchone()
                 institution_name = institution['name'] if institution else "Unknown Institution"
                 
-                # Format the scores and last active dates
                 for user in users:
                     user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else 0
                     if user['last_active']:
@@ -1683,7 +1661,6 @@ def manage_users():
                     else:
                         user['last_active_str'] = "Never"
                 
-                # Get institute admin details for breadcrumb
                 cursor.execute('SELECT username FROM users WHERE id = %s', (parent_id,))
                 admin = cursor.fetchone()
                 admin_name = admin['username'] if admin else "Unknown Admin"
@@ -1696,20 +1673,16 @@ def manage_users():
                                     admin_name=admin_name,
                                     parent_id=parent_id)
             else:
-                # Show all institute admins
-                cursor.execute('''
-                    SELECT u.*, i.name as institution_name,
+                cursor.execute('''SELECT u.*, i.name as institution_name,
                            COUNT(s.id) as student_count
                     FROM users u
                     LEFT JOIN institutions i ON u.institution_id = i.id
                     LEFT JOIN users s ON s.institution_id = i.id AND s.role = 'student_user'
                     WHERE u.role = 'institute_admin'
                     GROUP BY u.id
-                    ORDER BY u.username
-                ''')
+                    ORDER BY u.username''')
                 users = cursor.fetchall()
                 
-                # Format last active dates
                 for user in users:
                     if user['last_active']:
                         user['last_active_str'] = format_last_active(user['last_active'])
@@ -1722,9 +1695,7 @@ def manage_users():
                                     current_type="institute_admin")
         
         elif user_type in ['individual_user', 'student_user', 'super_admin']:
-            # Show users of the specific type
-            cursor.execute('''
-                SELECT u.*, 
+            cursor.execute('''SELECT u.*, 
                        COUNT(DISTINCT r.id) as quiz_count,
                        AVG(r.score / r.total_questions * 100) as avg_score,
                        i.name as institution_name
@@ -1733,11 +1704,9 @@ def manage_users():
                 LEFT JOIN institutions i ON u.institution_id = i.id
                 WHERE u.role = %s
                 GROUP BY u.id
-                ORDER BY u.username
-            ''', (user_type,))
+                ORDER BY u.username''', (user_type,))
             users = cursor.fetchall()
             
-            # Format the scores and last active dates
             for user in users:
                 user['avg_score'] = round(user['avg_score'], 1) if user['avg_score'] else 0
                 if user['last_active']:
@@ -1759,7 +1728,6 @@ def manage_users():
         conn.close()
 
 def format_last_active(last_active):
-    """Format the last active time to a readable string"""
     now = datetime.now()
     diff = now - last_active
     if diff.days > 0:
@@ -1770,8 +1738,6 @@ def format_last_active(last_active):
         return f"{diff.seconds // 60} minutes ago"
     else:
         return "Just now"
-    
-
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @super_admin_required
@@ -1819,7 +1785,438 @@ def delete_user(user_id):
     
     return redirect(url_for('manage_users'))
 
-# Error handlers
+@app.route('/subscriptions')
+@login_required
+def subscriptions():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute('''SELECT u.subscription_plan_id, u.subscription_start, u.subscription_end, p.name as plan_name
+            FROM users u
+            LEFT JOIN subscription_plans p ON u.subscription_plan_id = p.id
+            WHERE u.id = %s''', (session['user_id'],))
+        user_subscription = cursor.fetchone()
+        
+        cursor.execute('SELECT * FROM subscription_plans WHERE is_institution = FALSE ORDER BY price')
+        plans = cursor.fetchall()
+        
+        for plan in plans:
+            cursor.execute('SELECT exam_name FROM plan_exam_access WHERE plan_id = %s', (plan['id'],))
+            plan['exams'] = [row['exam_name'] for row in cursor.fetchall()]
+            
+            if user_subscription and user_subscription['subscription_plan_id'] == plan['id']:
+                plan['is_active'] = True
+                plan['expires_on'] = user_subscription['subscription_end']
+            else:
+                plan['is_active'] = False
+                plan['expires_on'] = None
+        
+        is_subscribed = user_subscription and user_subscription['subscription_end'] and user_subscription['subscription_end'] > datetime.now()
+        
+        return render_template('subscriptions.html', 
+                              plans=plans, 
+                              user_subscription=user_subscription,
+                              is_subscribed=is_subscribed)
+    except mysql.connector.Error as err:
+        logger.error(f"Database error in subscriptions page: {str(err)}")
+        flash('Error loading subscription data.', 'danger')
+        return redirect(url_for('user_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/subscribe/<int:plan_id>', methods=['GET', 'POST'])
+@login_required
+def subscribe(plan_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute('SELECT * FROM subscription_plans WHERE id = %s AND is_institution = FALSE', (plan_id,))
+        plan = cursor.fetchone()
+        
+        if not plan:
+            flash('Invalid subscription plan.', 'danger')
+            return redirect(url_for('subscriptions'))
+            
+        form = SubscriptionForm()
+        form.plan_id.choices = [(plan['id'], plan['name'])]
+        
+        cursor.execute('SELECT exam_name FROM plan_exam_access WHERE plan_id = %s', (plan_id,))
+        plan['exams'] = [row['exam_name'] for row in cursor.fetchall()]
+        
+        if form.validate_on_submit():
+            start_date = datetime.now()
+            end_date = start_date + timedelta(days=plan['duration_days'])
+            
+            cursor.execute('''UPDATE users 
+                SET subscription_plan_id = %s,
+                    subscription_start = %s,
+                    subscription_end = %s,
+                    last_active = %s
+                WHERE id = %s''', (plan_id, start_date, end_date, datetime.now(), session['user_id']))
+            
+            cursor.execute('''INSERT INTO subscription_history 
+                (user_id, subscription_plan_id, start_date, end_date, amount_paid, payment_method) 
+                VALUES (%s, %s, %s, %s, %s, %s)''', (session['user_id'], plan_id, start_date, end_date, plan['price'], form.payment_method.data))
+            
+            conn.commit()
+            flash(f'You have successfully subscribed to {plan["name"]}!', 'success')
+            return redirect(url_for('subscriptions'))
+        
+        return render_template('subscribe.html', form=form, plan=plan)
+    except mysql.connector.Error as err:
+        conn.rollback()
+        logger.error(f"Database error during subscription: {str(err)}")
+        flash('Error processing subscription.', 'danger')
+        return redirect(url_for('subscriptions'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/subscription_history')
+@login_required
+def subscription_history():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        cursor.execute('''SELECT u.subscription_plan_id, u.subscription_start, u.subscription_end, 
+                   p.name as plan_name, p.price
+            FROM users u
+            JOIN subscription_plans p ON u.subscription_plan_id = p.id
+            WHERE u.id = %s AND u.subscription_end > NOW() 
+                AND u.subscription_plan_id IS NOT NULL''', (session['user_id'],))
+        active_sub = cursor.fetchone()
+        
+        if active_sub:
+            cursor.execute('''SELECT COUNT(*) as count FROM subscription_history
+                WHERE user_id = %s 
+                AND subscription_plan_id = %s
+                AND start_date = %s''', (session['user_id'], active_sub['subscription_plan_id'], active_sub['subscription_start']))
+            
+            history_exists = cursor.fetchone()['count'] > 0
+            
+            if not history_exists:
+                cursor.execute('''INSERT INTO subscription_history 
+                    (user_id, subscription_plan_id, start_date, end_date, amount_paid, payment_method) 
+                    VALUES (%s, %s, %s, %s, %s, %s)''', (
+                    session['user_id'], 
+                    active_sub['subscription_plan_id'], 
+                    active_sub['subscription_start'], 
+                    active_sub['subscription_end'], 
+                    active_sub['price'], 
+                    'credit_card'
+                ))
+                conn.commit()
+        
+        cursor.execute('''SELECT sh.id, sh.start_date, sh.end_date, sh.amount_paid, sh.payment_method,
+                   p.name as plan_name, p.description
+            FROM subscription_history sh
+            JOIN subscription_plans p ON sh.subscription_plan_id = p.id
+            WHERE sh.user_id = %s
+            ORDER BY sh.start_date DESC''', (session['user_id'],))
+        history = cursor.fetchall()
+        
+        current_time = datetime.now()
+        
+        return render_template('subscription_history.html', history=history, now=current_time)
+    except mysql.connector.Error as err:
+        logger.error(f"Database error in subscription history: {str(err)}")
+        flash('Error retrieving subscription history.', 'danger')
+        return redirect(url_for('user_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/quiz', methods=['GET', 'POST'])
+@quiz_access_required
+def quiz():
+    conn = get_db_connection()
+    if conn is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('user_dashboard'))
+        
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        user_role = session.get('role')
+        user_id = session.get('user_id')
+        is_admin = user_role in ['super_admin', 'institute_admin']
+        is_institution_student = user_role == 'student_user'
+        
+        logger.debug(f"User ID: {user_id}, Role: {user_role}, Session: {session}")
+        
+        # Initialize filters to empty dict if not exists
+        filters = {}
+        questions = []
+        quiz_type = request.form.get('quiz_type', 'previous_year')
+        
+        accessible_exams = []
+        if user_role == 'individual_user':
+            cursor.execute('''SELECT subscription_plan_id, subscription_end
+                              FROM users WHERE id = %s''', (user_id,))
+            user_subscription = cursor.fetchone()
+            
+            if user_subscription and user_subscription['subscription_end'] and user_subscription['subscription_end'] > datetime.now():
+                cursor.execute('SELECT exam_name FROM plan_exam_access WHERE plan_id = %s', (user_subscription['subscription_plan_id'],))
+                accessible_exams = [row['exam_name'] for row in cursor.fetchall()]
+            else:
+                flash('You need an active subscription to access quizzes.', 'warning')
+                return redirect(url_for('subscriptions'))
+        else:
+            # Admins and students have access to all exams
+            cursor.execute('SELECT DISTINCT exam_name FROM questions')
+            accessible_exams = [row['exam_name'] for row in cursor.fetchall()]
+
+        if request.method == 'POST':
+            if 'filter' in request.form:
+                # This is a filter request, just update filters
+                exam_name = sanitize_input(request.form.get('exam_name', ''))
+                year = sanitize_input(request.form.get('year', ''))
+                subject = sanitize_input(request.form.get('subject', ''))
+                topics = sanitize_input(request.form.get('topics', ''))
+                difficulty = sanitize_input(request.form.get('difficulty', ''))
+                
+                filters = {
+                    'exam_name': exam_name,
+                    'year': year,
+                    'subject': subject,
+                    'topics': topics,
+                    'difficulty': difficulty
+                }
+                
+                # Return the page with filters applied but no questions yet
+                
+            elif 'generate' in request.form:
+                # This is a quiz generation request
+                exam_name = sanitize_input(request.form.get('exam_name', ''))
+                year = sanitize_input(request.form.get('year', ''))
+                subject = sanitize_input(request.form.get('subject', ''))
+                topics = sanitize_input(request.form.get('topics', ''))
+                difficulty = sanitize_input(request.form.get('difficulty', 'medium'))
+                num_questions = 10  # Default value, could be made configurable
+                
+                # Update filters for template
+                filters = {
+                    'exam_name': exam_name,
+                    'year': year,
+                    'subject': subject,
+                    'topics': topics,
+                    'difficulty': difficulty
+                }
+                
+                # Build the query based on filters
+                query_parts = ['SELECT * FROM questions WHERE 1=1']
+                query_params = []
+                
+                if quiz_type == 'previous_year':
+                    if exam_name and exam_name in accessible_exams:
+                        query_parts.append('AND exam_name = %s')
+                        query_params.append(exam_name)
+                    elif not is_admin and not is_institution_student:
+                        # For individual users, restrict to accessible exams
+                        if accessible_exams:
+                            placeholder = ', '.join(['%s'] * len(accessible_exams))
+                            query_parts.append(f'AND exam_name IN ({placeholder})')
+                            query_params.extend(accessible_exams)
+                        else:
+                            flash('No exam access with your current subscription.', 'warning')
+                            return redirect(url_for('subscriptions'))
+                    
+                    if year:
+                        query_parts.append('AND year = %s')
+                        query_params.append(int(year))
+                else:  # subject_wise
+                    if subject:
+                        query_parts.append('AND subject = %s')
+                        query_params.append(subject)
+                    
+                    if topics:
+                        # Split topics by comma and search
+                        topic_list = [t.strip() for t in topics.split(',')]
+                        topic_conditions = []
+                        for topic in topic_list:
+                            topic_conditions.append('topics LIKE %s')
+                            query_params.append(f'%{topic}%')
+                        
+                        if topic_conditions:
+                            query_parts.append(f"AND ({' OR '.join(topic_conditions)})")
+                
+                if difficulty:
+                    query_parts.append('AND difficulty = %s')
+                    query_params.append(difficulty)
+                
+                # Add access control for individual users
+                if user_role == 'individual_user' and accessible_exams:
+                    placeholder = ', '.join(['%s'] * len(accessible_exams))
+                    query_parts.append(f'AND exam_name IN ({placeholder})')
+                    query_params.extend(accessible_exams)
+                
+                # Complete the query
+                query_parts.append('ORDER BY RAND()')
+                query_parts.append('LIMIT %s')
+                query_params.append(num_questions)
+                
+                final_query = ' '.join(query_parts)
+                logger.debug(f"Quiz query: {final_query} with params {query_params}")
+                
+                cursor.execute(final_query, query_params)
+                questions = cursor.fetchall()
+                
+                if not questions:
+                    flash('No questions found matching your criteria. Try different filters.', 'warning')
+            
+            # If there's an actual form submission for taking the quiz
+            elif any(key.startswith('question_') for key in request.form.keys()):
+                # This is an actual quiz submission
+                session['quiz_questions'] = {}
+                user_answers = {}
+                
+                for key, value in request.form.items():
+                    if key.startswith('question_'):
+                        question_id = key.replace('question_', '')
+                        cursor.execute('SELECT * FROM questions WHERE id = %s', (question_id,))
+                        q = cursor.fetchone()
+                        
+                        if q:
+                            # Store answer for saving later
+                            user_answers[question_id] = value
+                            
+                            # Store question info for the results page
+                            session['quiz_questions'][question_id] = {
+                                'question': q['question'],
+                                'options': {
+                                    'a': q['option_a'],
+                                    'b': q['option_b'],
+                                    'c': q['option_c'],
+                                    'd': q['option_d']
+                                },
+                                'correct_answer': q['correct_answer'],
+                                'explanation': q['explanation']
+                            }
+                
+                if user_answers:
+                    # Calculate score
+                    score = 0
+                    for qid, user_answer in user_answers.items():
+                        correct_answer = session['quiz_questions'][qid]['correct_answer']
+                        if user_answer == correct_answer:
+                            score += 1
+                    
+                    time_taken = int(request.form.get('time_taken', 0))
+                    
+                    # Save results
+                    cursor.execute('''INSERT INTO results 
+                        (user_id, score, total_questions, time_taken, answers, date_taken) 
+                        VALUES (%s, %s, %s, %s, %s, %s)''',
+                        (session['user_id'], score, len(user_answers), time_taken, json.dumps(user_answers), datetime.now()))
+                    conn.commit()
+                    
+                    result_id = cursor.lastrowid
+                    
+                    flash(f'Quiz completed! Your score: {score}/{len(user_answers)}', 'success')
+                    logger.info(f"User {session['username']} completed quiz with score {score}/{len(user_answers)}")
+                    return redirect(url_for('results', result_id=result_id))
+                else:
+                    flash('No answers submitted.', 'warning')
+        
+        # Get data for filter dropdowns
+        cursor.execute('SELECT DISTINCT exam_name FROM questions')
+        exam_names = [row['exam_name'] for row in cursor.fetchall()]
+        
+        cursor.execute('SELECT DISTINCT year FROM questions ORDER BY year DESC')
+        years = [row['year'] for row in cursor.fetchall()]
+        
+        cursor.execute('SELECT DISTINCT subject FROM questions')
+        subjects = [row['subject'] for row in cursor.fetchall()]
+        
+        return render_template('quiz.html', 
+                              exam_names=exam_names,
+                              years=years,
+                              subjects=subjects,
+                              accessible_exams=accessible_exams,
+                              filters=filters,  # Always pass filters, even if empty
+                              questions=questions,
+                              quiz_type=quiz_type,
+                              difficulties=['easy', 'medium', 'hard'])
+    
+    except mysql.connector.Error as err:
+        logger.error(f"Database error in quiz: {str(err)}")
+        flash('Error loading quiz data.', 'danger')
+        return redirect(url_for('user_dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/take_quiz', methods=['GET', 'POST'])
+@quiz_access_required
+def take_quiz():
+    if 'quiz_questions' not in session:
+        flash('No quiz in progress. Please start a new quiz.', 'warning')
+        return redirect(url_for('quiz'))
+    
+    questions = session['quiz_questions']
+    
+    if request.method == 'POST':
+        user_answers = {qid: sanitize_input(request.form.get(qid)) for qid in questions.keys()}
+        score = 0
+        total_questions = len(questions)
+        
+        for qid, user_answer in user_answers.items():
+            if user_answer == questions[qid]['correct_answer']:
+                score += 1
+        
+        start_time = datetime.fromisoformat(session['quiz_start_time'])
+        time_taken = int((datetime.now() - start_time).total_seconds())
+        
+        conn = get_db_connection()
+        if conn is None:
+            flash('Database connection error.', 'danger')
+            return redirect(url_for('user_dashboard'))
+        
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''INSERT INTO results 
+                (user_id, score, total_questions, time_taken, answers, date_taken) 
+                VALUES (%s, %s, %s, %s, %s, %s)''',
+                (session['user_id'], score, total_questions, time_taken, json.dumps(user_answers), datetime.now()))
+            conn.commit()
+            
+            result_id = cursor.lastrowid
+            session.pop('quiz_questions', None)
+            session.pop('quiz_start_time', None)
+            session.pop('quiz_exam_name', None)
+            
+            flash(f'Quiz completed! Your score: {score}/{total_questions}', 'success')
+            logger.info(f"User {session['username']} completed quiz with score {score}/{total_questions}")
+            return redirect(url_for('results', result_id=result_id))
+        
+        except mysql.connector.Error as err:
+            conn.rollback()
+            logger.error(f"Database error during quiz submission: {str(err)}")
+            flash('Error saving quiz results.', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    
+    return render_template('take_quiz.html', questions=questions)
+
+# SocketIO Events for Admin Dashboard
+@socketio.on('connect', namespace='/admin')
+def handle_connect():
+    if session.get('role') in ['super_admin', 'institute_admin']:
+        logger.debug(f"Admin {session['username']} connected to SocketIO")
+    else:
+        socketio.emit('disconnect', namespace='/admin')
+
+@socketio.on('disconnect', namespace='/admin')
+def handle_disconnect():
+    logger.debug(f"Admin {session.get('username', 'Unknown')} disconnected from SocketIO")
+
+# Error Handlers
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('404.html'), 404
@@ -1831,36 +2228,10 @@ def internal_server_error(e):
 
 @app.errorhandler(413)
 def request_entity_too_large(e):
-    flash('The file you tried to upload is too large.', 'error')
-    return redirect(request.referrer or url_for('index'))
+    flash('File too large. Maximum size is 16MB.', 'danger')
+    return redirect(request.url), 413
 
-# SocketIO Events
-@socketio.on('connect', namespace='/admin')
-def handle_admin_connect():
-    if 'username' not in session or session.get('role') != 'super_admin':
-        return False
-    
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor(dictionary=True)
-        try:
-            cursor.execute('''SELECT COUNT(*) as count 
-                FROM users 
-                WHERE last_active > %s''',
-                (datetime.now() - timedelta(minutes=30),))
-            result = cursor.fetchone()
-            active_users = result['count'] if result else 0
-            
-            socketio.emit('active_users', {'count': active_users}, namespace='/admin')
-        except mysql.connector.Error as err:
-            logger.error(f"Database error in socket connection: {str(err)}")
-        finally:
-            cursor.close()
-            conn.close()
-
+# Run the Application
 if __name__ == '__main__':
     init_db()
-    port = int(os.getenv('PORT', 5000))
-    app.jinja_env.auto_reload = True
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
-    socketio.run(app, host='0.0.0.0', port=port, debug=(os.getenv('FLASK_ENV') == 'development'))
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

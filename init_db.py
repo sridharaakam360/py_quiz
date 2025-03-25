@@ -1,317 +1,361 @@
-import mysql.connector
-from dotenv import load_dotenv
-import os
-from werkzeug.security import generate_password_hash
-import logging
-import argparse
-import time
-import sys
+-- Create the chemist database
+CREATE DATABASE IF NOT EXISTS chemist CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE chemist;
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('init_db.log')
-    ]
-)
-logger = logging.getLogger(__name__)
+-- Users table - core user information
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('individual_user', 'student_user', 'institute_admin', 'super_admin') DEFAULT 'individual_user',
+    status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+    user_type ENUM('individual', 'institution_admin', 'institution_student') DEFAULT 'individual',
+    institution_id INT NULL,
+    subscription_plan_id INT NULL,
+    subscription_start DATETIME NULL,
+    subscription_end DATETIME NULL,
+    last_active DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    profile_image VARCHAR(255) NULL,
+    preferences JSON NULL,
+    INDEX idx_username (username),
+    INDEX idx_email (email),
+    INDEX idx_role (role),
+    INDEX idx_status (status),
+    INDEX idx_user_type (user_type),
+    INDEX idx_institution_id (institution_id),
+    INDEX idx_subscription (subscription_plan_id, subscription_end),
+    INDEX idx_last_active (last_active)
+);
 
-# Load environment variables
-load_dotenv()
+-- Institutions table - for managing educational institutions
+CREATE TABLE institutions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    admin_id INT NULL,
+    institution_code VARCHAR(20) UNIQUE NOT NULL,
+    description TEXT NULL,
+    logo_url VARCHAR(255) NULL,
+    website VARCHAR(255) NULL,
+    address TEXT NULL,
+    subscription_plan_id INT NULL,
+    user_limit INT DEFAULT 50,
+    subscription_start DATETIME NULL,
+    subscription_end DATETIME NULL,
+    status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_name (name),
+    INDEX idx_institution_code (institution_code),
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_subscription (subscription_plan_id, subscription_end),
+    INDEX idx_status (status)
+);
 
-# Database configuration (without database name initially)
-db_config = {
-    'host': os.getenv('MYSQL_HOST', 'localhost'),
-    'user': os.getenv('MYSQL_USER', 'root'),
-    'password': os.getenv('MYSQL_PASSWORD', ''),
-    'auth_plugin': 'mysql_native_password'
-}
+-- Add foreign key relationships for users
+ALTER TABLE users
+ADD CONSTRAINT fk_users_institution
+FOREIGN KEY (institution_id) REFERENCES institutions(id) ON DELETE SET NULL;
 
-def create_database_and_tables(reset_db=False):
-    """
-    Initialize the database and tables
-    
-    Args:
-        reset_db (bool): If True, drops and recreates the database
-    """
-    try:
-        # Connect to MySQL without specifying a database
-        logger.info(f"Connecting to MySQL at {db_config['host']}...")
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+-- Add foreign key relationships for institutions
+ALTER TABLE institutions
+ADD CONSTRAINT fk_institutions_admin
+FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL;
 
-        # Drop database if reset_db is True
-        if reset_db:
-            logger.warning("Dropping existing 'pharmacy_exam' database...")
-            cursor.execute("DROP DATABASE IF EXISTS pharmacy_exam")
-            logger.info("Database dropped successfully.")
-        
-        # Create the database if it doesn't exist
-        cursor.execute("CREATE DATABASE IF NOT EXISTS pharmacy_exam")
-        logger.info("Database 'pharmacy_exam' created or already exists.")
-        
-        # Switch to the database
-        cursor.execute("USE pharmacy_exam")
-        logger.info("Connected to 'pharmacy_exam' database.")
+-- Subscription plans table - defines available subscription options
+CREATE TABLE subscription_plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    duration_days INT NOT NULL,
+    max_users INT DEFAULT 1,
+    is_institution BOOLEAN DEFAULT FALSE,
+    is_popular BOOLEAN DEFAULT FALSE,
+    features JSON NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_is_institution (is_institution),
+    INDEX idx_is_popular (is_popular)
+);
 
-        # Create users table
-        logger.info("Creating users table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                role ENUM('user', 'admin') DEFAULT 'user',
-                status ENUM('active', 'inactive') DEFAULT 'active',
-                last_active DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_username (username),
-                INDEX idx_role (role),
-                INDEX idx_status (status),
-                INDEX idx_last_active (last_active)
-            )
-        ''')
-        
-        # Create questions table
-        logger.info("Creating questions table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS questions (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                question TEXT NOT NULL,
-                option_a VARCHAR(255) NOT NULL,
-                option_b VARCHAR(255) NOT NULL,
-                option_c VARCHAR(255) NOT NULL,
-                option_d VARCHAR(255) NOT NULL,
-                correct_answer CHAR(1) NOT NULL,
-                category VARCHAR(50) NOT NULL,
-                difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
-                exam_name VARCHAR(100) NOT NULL,
-                subject VARCHAR(100) NOT NULL,
-                topics VARCHAR(255) NOT NULL,
-                year INT NOT NULL,
-                explanation TEXT NOT NULL,
-                created_by INT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-                INDEX idx_exam_year (exam_name, year),
-                INDEX idx_subject (subject),
-                INDEX idx_difficulty (difficulty),
-                INDEX idx_category (category),
-                INDEX idx_created_at (created_at)
-            )
-        ''')
-        
-        # Create results table
-        logger.info("Creating results table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS results (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                score INT NOT NULL,
-                total_questions INT NOT NULL,
-                time_taken INT NOT NULL,
-                answers JSON,
-                date_taken DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_user_id (user_id),
-                INDEX idx_date_taken (date_taken)
-            )
-        ''')
-        
-        # Create question_reviews table
-        logger.info("Creating question_reviews table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS question_reviews (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                question_id INT NOT NULL,
-                user_id INT NOT NULL,
-                comment TEXT,
-                rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_question_id (question_id),
-                INDEX idx_user_id (user_id),
-                INDEX idx_rating (rating)
-            )
-        ''')
+-- Add foreign key relationships for subscription plans
+ALTER TABLE users
+ADD CONSTRAINT fk_users_subscription_plan
+FOREIGN KEY (subscription_plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL;
 
-        # Check for admin user and create if not exists
-        cursor.execute('SELECT COUNT(*) FROM users WHERE role = "admin"')
-        if cursor.fetchone()[0] == 0:
-            admin_username = os.getenv('ADMIN_USERNAME', 'admin')
-            admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
-            hashed_password = generate_password_hash(admin_password)
-            
-            logger.info(f"Creating admin user '{admin_username}'...")
-            cursor.execute('''
-                INSERT INTO users (username, password, role, status, last_active) 
-                VALUES (%s, %s, %s, %s, NOW())
-            ''', (admin_username, hashed_password, 'admin', 'active'))
-            logger.info("Admin user created successfully.")
-        else:
-            logger.info("Admin user already exists, skipping creation.")
-        
-        # Add sample user if specified
-        if reset_db:
-            logger.info("Creating sample user 'user'...")
-            cursor.execute('''
-                INSERT INTO users (username, password, role, status, last_active) 
-                VALUES (%s, %s, %s, %s, NOW())
-            ''', ('user', generate_password_hash('password123'), 'user', 'active'))
-            logger.info("Sample user created successfully.")
-        
-        # Add sample questions if specified
-        if reset_db:
-            add_sample_questions(cursor)
-        
-        conn.commit()
-        logger.info("Database and tables initialized successfully.")
+ALTER TABLE institutions
+ADD CONSTRAINT fk_institutions_subscription_plan
+FOREIGN KEY (subscription_plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL;
 
-    except mysql.connector.Error as err:
-        logger.error(f"Error during database initialization: {str(err)}")
-        sys.exit(1)
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-            logger.info("Database connection closed.")
+-- Plan exam access - links subscription plans to specific exams
+CREATE TABLE plan_exam_access (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    plan_id INT NOT NULL,
+    exam_name VARCHAR(100) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_plan_exam (plan_id, exam_name),
+    INDEX idx_exam_name (exam_name)
+);
 
-def add_sample_questions(cursor):
-    """Add sample questions to the database"""
-    try:
-        logger.info("Adding sample questions...")
-        
-        # NAPLEX sample questions
-        questions = [
-            {
-                'question': 'Which of the following antihypertensive medications is contraindicated in pregnancy?',
-                'option_a': 'Labetalol',
-                'option_b': 'Methyldopa',
-                'option_c': 'Lisinopril',
-                'option_d': 'Nifedipine',
-                'correct_answer': 'c',
-                'category': 'Pharmacology',
-                'difficulty': 'medium',
-                'exam_name': 'NAPLEX',
-                'subject': 'Cardiovascular',
-                'topics': 'Antihypertensives, Pregnancy',
-                'year': 2023,
-                'explanation': 'ACE inhibitors like lisinopril are contraindicated in pregnancy because they can cause fetal harm, particularly in the second and third trimesters.'
-            },
-            {
-                'question': 'Which of the following antibiotics is most likely to cause photosensitivity?',
-                'option_a': 'Doxycycline',
-                'option_b': 'Amoxicillin',
-                'option_c': 'Azithromycin',
-                'option_d': 'Ceftriaxone',
-                'correct_answer': 'a',
-                'category': 'Pharmacology',
-                'difficulty': 'easy',
-                'exam_name': 'NAPLEX',
-                'subject': 'Infectious Disease',
-                'topics': 'Antibiotics, Adverse Effects',
-                'year': 2023,
-                'explanation': 'Tetracyclines, particularly doxycycline, are known to cause photosensitivity reactions. Patients should be advised to avoid sun exposure and use sunscreen.'
-            },
-            {
-                'question': 'A 65-year-old patient with type 2 diabetes and CKD stage 3 would benefit most from which of the following antidiabetic medications?',
-                'option_a': 'Metformin',
-                'option_b': 'Glimepiride',
-                'option_c': 'Empagliflozin',
-                'option_d': 'Rosiglitazone',
-                'correct_answer': 'c',
-                'category': 'Therapeutics',
-                'difficulty': 'hard',
-                'exam_name': 'NAPLEX',
-                'subject': 'Endocrinology',
-                'topics': 'Diabetes, Kidney Disease',
-                'year': 2024,
-                'explanation': 'SGLT2 inhibitors like empagliflozin have shown cardiovascular and renal benefits in patients with type 2 diabetes and chronic kidney disease. They can slow the progression of kidney disease and reduce cardiovascular events.'
-            },
-            {
-                'question': 'Which law established the "closed system" for controlled substances distribution?',
-                'option_a': 'Durham-Humphrey Amendment',
-                'option_b': 'Controlled Substances Act',
-                'option_c': 'Prescription Drug Marketing Act',
-                'option_d': 'Drug Quality and Security Act',
-                'correct_answer': 'b',
-                'category': 'Law',
-                'difficulty': 'medium',
-                'exam_name': 'MPJE',
-                'subject': 'Pharmacy Law',
-                'topics': 'Controlled Substances, Federal Law',
-                'year': 2023,
-                'explanation': 'The Controlled Substances Act of 1970 established a closed system of distribution for controlled substances, requiring registration with the DEA for all handlers of controlled substances.'
-            },
-            {
-                'question': 'What is the primary mechanism of action of statins?',
-                'option_a': 'Inhibition of HMG-CoA reductase',
-                'option_b': 'Inhibition of cholesterol absorption',
-                'option_c': 'Activation of lipoprotein lipase',
-                'option_d': 'Inhibition of bile acid reabsorption',
-                'correct_answer': 'a',
-                'category': 'Pharmacology',
-                'difficulty': 'easy',
-                'exam_name': 'NAPLEX',
-                'subject': 'Cardiovascular',
-                'topics': 'Lipid-Lowering Agents, Mechanism of Action',
-                'year': 2022,
-                'explanation': 'Statins inhibit HMG-CoA reductase, the rate-limiting enzyme in cholesterol biosynthesis, thereby reducing endogenous cholesterol production and lowering serum LDL cholesterol levels.'
-            },
-            {
-                'question': 'Which of the following is the most appropriate treatment for acute narrow-angle glaucoma?',
-                'option_a': 'Timolol eye drops',
-                'option_b': 'Latanoprost eye drops',
-                'option_c': 'Pilocarpine eye drops',
-                'option_d': 'Artificial tears',
-                'correct_answer': 'c',
-                'category': 'Therapeutics',
-                'difficulty': 'medium',
-                'exam_name': 'NAPLEX',
-                'subject': 'Ophthalmology',
-                'topics': 'Glaucoma, Emergency Treatment',
-                'year': 2023,
-                'explanation': 'Pilocarpine, a cholinergic agonist, constricts the pupil (miosis) and opens the trabecular meshwork, facilitating aqueous humor drainage. It is used in the acute management of narrow-angle glaucoma.'
-            }
-        ]
-        
-        # Get admin user ID
-        cursor.execute("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
-        admin_id = cursor.fetchone()[0]
-        
-        # Insert sample questions
-        for q in questions:
-            cursor.execute('''
-                INSERT INTO questions 
-                (question, option_a, option_b, option_c, option_d, correct_answer, 
-                category, difficulty, exam_name, subject, topics, year, explanation, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                q['question'], q['option_a'], q['option_b'], q['option_c'], q['option_d'], 
-                q['correct_answer'], q['category'], q['difficulty'], q['exam_name'], 
-                q['subject'], q['topics'], q['year'], q['explanation'], admin_id
-            ))
-        
-        logger.info(f"Added {len(questions)} sample questions successfully.")
-    except mysql.connector.Error as err:
-        logger.error(f"Error adding sample questions: {str(err)}")
-        raise
+-- Subscription history - tracks all subscription activities
+CREATE TABLE subscription_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    institution_id INT NULL,
+    subscription_plan_id INT NOT NULL,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME NOT NULL,
+    amount_paid DECIMAL(10, 2) NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    transaction_id VARCHAR(100) NULL,
+    invoice_id VARCHAR(100) NULL,
+    payment_status ENUM('pending', 'completed', 'failed', 'refunded') DEFAULT 'completed',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (institution_id) REFERENCES institutions(id) ON DELETE SET NULL,
+    FOREIGN KEY (subscription_plan_id) REFERENCES subscription_plans(id) ON DELETE RESTRICT,
+    INDEX idx_user_id (user_id),
+    INDEX idx_institution_id (institution_id),
+    INDEX idx_subscription_plan_id (subscription_plan_id),
+    INDEX idx_dates (start_date, end_date),
+    INDEX idx_payment_status (payment_status)
+);
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Initialize the database for the Pharmacy Exam Prep application')
-    parser.add_argument('--reset', action='store_true', help='Reset the database (drop and recreate)')
-    args = parser.parse_args()
-    
-    logger.info("Starting database initialization...")
-    start_time = time.time()
-    
-    try:
-        create_database_and_tables(reset_db=args.reset)
-        elapsed_time = time.time() - start_time
-        logger.info(f"Database initialization completed in {elapsed_time:.2f} seconds.")
-    except Exception as e:
-        logger.error(f"Unexpected error during initialization: {str(e)}")
-        sys.exit(1)
+-- Questions table - stores all exam questions
+CREATE TABLE questions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question TEXT NOT NULL,
+    option_a VARCHAR(255) NOT NULL,
+    option_b VARCHAR(255) NOT NULL,
+    option_c VARCHAR(255) NOT NULL,
+    option_d VARCHAR(255) NOT NULL,
+    correct_answer CHAR(1) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'medium',
+    difficulty_rating DECIMAL(3,2) NULL COMMENT 'Calculated difficulty based on user performance',
+    exam_name VARCHAR(100) NOT NULL,
+    subject VARCHAR(100) NOT NULL,
+    topics VARCHAR(255) NOT NULL,
+    tags VARCHAR(255) NULL COMMENT 'Comma-separated tags for improved searching',
+    year INT NOT NULL,
+    explanation TEXT NOT NULL,
+    reference_source VARCHAR(255) NULL,
+    image_url VARCHAR(255) NULL,
+    meta_data JSON NULL,
+    created_by INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_exam_year (exam_name, year),
+    INDEX idx_subject (subject),
+    INDEX idx_difficulty (difficulty),
+    INDEX idx_difficulty_rating (difficulty_rating),
+    INDEX idx_category (category),
+    INDEX idx_tags (tags(191)),
+    INDEX idx_created_at (created_at),
+    FULLTEXT INDEX ft_question (question, explanation, topics)
+);
+
+-- Question categories table - for hierarchical organization of questions
+CREATE TABLE question_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(100) NOT NULL,
+    parent_id INT NULL,
+    description TEXT NULL,
+    icon VARCHAR(50) NULL,
+    display_order INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES question_categories(id) ON DELETE SET NULL,
+    UNIQUE KEY idx_slug (slug),
+    INDEX idx_name (name),
+    INDEX idx_parent_id (parent_id),
+    INDEX idx_display_order (display_order)
+);
+
+-- Category question linking table - for many-to-many relationships
+CREATE TABLE category_question (
+    category_id INT NOT NULL,
+    question_id INT NOT NULL,
+    PRIMARY KEY (category_id, question_id),
+    FOREIGN KEY (category_id) REFERENCES question_categories(id) ON DELETE CASCADE,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+-- Question statistics table - for tracking performance metrics
+CREATE TABLE question_stats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question_id INT NOT NULL,
+    times_presented INT DEFAULT 0,
+    times_answered_correctly INT DEFAULT 0,
+    average_answer_time INT NULL COMMENT 'Average time in seconds',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    INDEX idx_question_id (question_id),
+    INDEX idx_performance (times_presented, times_answered_correctly)
+);
+
+-- Quiz results table - stores user quiz attempts
+CREATE TABLE results (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    score INT NOT NULL,
+    total_questions INT NOT NULL,
+    time_taken INT NOT NULL,
+    answers JSON NULL,
+    quiz_type VARCHAR(50) NULL,
+    exam_name VARCHAR(100) NULL,
+    subject VARCHAR(100) NULL,
+    date_taken DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_date_taken (date_taken),
+    INDEX idx_exam_name (exam_name),
+    INDEX idx_subject (subject)
+);
+
+-- Question reviews table - for user feedback on questions
+CREATE TABLE question_reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    question_id INT NOT NULL,
+    user_id INT NOT NULL,
+    comment TEXT NULL,
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_user_question (user_id, question_id),
+    INDEX idx_question_id (question_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_rating (rating)
+);
+
+-- Study progress table - tracks user progress through topics
+CREATE TABLE study_progress (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subject VARCHAR(100) NOT NULL,
+    topic VARCHAR(100) NOT NULL,
+    progress_percentage DECIMAL(5,2) DEFAULT 0.00,
+    completed_questions INT DEFAULT 0,
+    correct_answers INT DEFAULT 0,
+    last_activity DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_user_topic (user_id, subject, topic),
+    INDEX idx_user_id (user_id),
+    INDEX idx_subject (subject),
+    INDEX idx_topic (topic),
+    INDEX idx_progress (progress_percentage)
+);
+
+-- Custom quizzes table - for saved quiz configurations
+CREATE TABLE custom_quizzes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    configuration JSON NOT NULL,
+    is_favorite BOOLEAN DEFAULT FALSE,
+    times_taken INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_favorite (is_favorite)
+);
+
+-- Notifications table - for system and user notifications
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    institution_id INT NULL,
+    type ENUM('subscription_expiring', 'subscription_renewed', 'subscription_canceled', 'payment_failed', 'system_update', 'new_content', 'achievement') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    action_url VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (institution_id) REFERENCES institutions(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_institution_id (institution_id),
+    INDEX idx_is_read (is_read),
+    INDEX idx_type (type),
+    INDEX idx_created_at (created_at)
+);
+
+-- User activity logs - tracks important user actions
+CREATE TABLE user_activity_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    activity_type VARCHAR(50) NOT NULL,
+    description TEXT NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_activity_type (activity_type),
+    INDEX idx_created_at (created_at)
+);
+
+-- System settings table - for application configuration
+CREATE TABLE system_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value TEXT NOT NULL,
+    data_type ENUM('string', 'integer', 'float', 'boolean', 'json') DEFAULT 'string',
+    description TEXT NULL,
+    is_public BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_setting_key (setting_key),
+    INDEX idx_is_public (is_public)
+);
+
+-- Question import history - tracks bulk imports
+CREATE TABLE question_import_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    total_records INT DEFAULT 0,
+    successful_imports INT DEFAULT 0,
+    failed_imports INT DEFAULT 0,
+    error_log TEXT NULL,
+    status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
+);
+
+-- User achievements table - for gamification
+CREATE TABLE user_achievements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    achievement_key VARCHAR(50) NOT NULL,
+    achievement_name VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_user_achievement (user_id, achievement_key),
+    INDEX idx_user_id (user_id),
+    INDEX idx_achievement_key (achievement_key),
+    INDEX idx_awarded_at (awarded_at)
+);
+
+-- Create initial super admin user
+INSERT INTO users (username, email, password, role, status, last_active)
+VALUES ('superadmin', 'admin@chemist.com', '$2b$12$1xxxxxxxxxxxxxxxxxxxxuxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'super_admin', 'active', NOW());

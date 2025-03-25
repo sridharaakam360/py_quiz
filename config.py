@@ -4,7 +4,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret-key-for-dev')
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
     MYSQL_USER = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'login@2021')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'newpass123')
     MYSQL_DB = os.getenv('MYSQL_DB', 'pharmacy_exam')
     DEBUG = False
     SESSION_COOKIE_SECURE = True

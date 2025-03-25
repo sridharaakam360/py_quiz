@@ -65,6 +65,86 @@
             </div>
         </div>
     </div>
+
+    <!-- Subscription Status -->
+    {% if user_subscription %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in mb-6">
+        <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Subscription Status</h3>
+        
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center bg-indigo-50 dark:bg-indigo-900 p-4 rounded-lg">
+            <div>
+                <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-1">{{ user_subscription.plan_name }}</h4>
+                <p class="text-sm text-indigo-700 dark:text-indigo-400">
+                    Expires: {% if user_subscription.subscription_end %}{{ user_subscription.subscription_end.strftime('%b %d, %Y') }}{% else %}Not set{% endif %}
+                </p>
+            </div>
+            
+            <div class="mt-4 md:mt-0 flex flex-wrap gap-2">
+                <a href="{{ url_for('subscriptions') }}" class="btn-secondary text-sm py-2">
+                    Manage Subscription
+                </a>
+                <a href="{{ url_for('subscription_history') }}" class="btn-secondary text-sm py-2">
+                    View History
+                </a>
+            </div>
+        </div>
+        
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white dark:bg-gray-750 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h5 class="font-medium text-gray-800 dark:text-gray-300 mb-2">Available Exams</h5>
+                <ul class="space-y-1">
+                    {% for exam in accessible_exams %}
+                    <li class="flex items-center text-sm">
+                        <svg class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        <span class="text-gray-700 dark:text-gray-400">{{ exam }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-750 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h5 class="font-medium text-gray-800 dark:text-gray-300 mb-2">Subscription Benefits</h5>
+                <ul class="space-y-1">
+                    <li class="flex items-center text-sm">
+                        <svg class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        <span class="text-gray-700 dark:text-gray-400">Unlimited quiz attempts</span>
+                    </li>
+                    <li class="flex items-center text-sm">
+                        <svg class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        <span class="text-gray-700 dark:text-gray-400">Detailed explanations</span>
+                    </li>
+                    <li class="flex items-center text-sm">
+                        <svg class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        <span class="text-gray-700 dark:text-gray-400">Performance tracking</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in mb-6">
+        <div class="flex flex-col md:flex-row items-center justify-between">
+            <div class="mb-4 md:mb-0">
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-2">Upgrade Your Experience</h3>
+                <p class="text-gray-600 dark:text-gray-400">Subscribe to access all our premium exam prep materials</p>
+            </div>
+            <a href="{{ url_for('subscriptions') }}" class="btn flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
+                </svg>
+                View Subscription Plans
+            </a>
+        </div>
+    </div>
+    {% endif %}
     
     <!-- Recent Results -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">

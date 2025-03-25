@@ -76,6 +76,64 @@
         </div>
     </div>
     
+    <!-- Student Management -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Student Management</h3>
+            <span class="text-sm text-gray-600 dark:text-gray-400">{{ student_count }} / {{ institution.user_limit }} students</span>
+        </div>
+        
+        {% if students %}
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                        <tr>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Username</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Email</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Status</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Last Active</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Quizzes</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Avg. Score</th>
+                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for student in students %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200">
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.username }}</td>
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.email }}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium
+                                    {% if student.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                    {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                    {{ student.status|capitalize }}
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.last_active_str }}</td>
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.quiz_count }}</td>
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.avg_score }}%</td>
+                            <td class="py-3 px-4">
+                                <form method="POST" action="{{ url_for('remove_student', student_id=student.id) }}" class="inline-block" onsubmit="return confirm('Are you sure you want to remove this student?');">
+                                    <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
+                <p class="text-gray-600 dark:text-gray-400">No students registered yet.</p>
+                <button onclick="document.getElementById('addStudentModal').classList.remove('hidden')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">Add Your First Student</button>
+            </div>
+        {% endif %}
+    </div>
+
     <!-- Student Performance -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
         <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Student Performance</h3>
@@ -168,64 +226,6 @@
         {% else %}
             <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
                 <p class="text-gray-600 dark:text-gray-400">No quiz results available yet.</p>
-            </div>
-        {% endif %}
-    </div>
-    
-    <!-- Student Management -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Student Management</h3>
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{ student_count }} / {{ institution.user_limit }} students</span>
-        </div>
-        
-        {% if students %}
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Username</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Email</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Status</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Last Active</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Quizzes</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Avg. Score</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for student in students %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.username }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.email }}</td>
-                            <td class="py-3 px-4">
-                                <span class="px-2 py-1 rounded-full text-xs font-medium
-                                    {% if student.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                    {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                                    {{ student.status|capitalize }}
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.last_active_str }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.quiz_count }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.avg_score }}%</td>
-                            <td class="py-3 px-4">
-                                <form method="POST" action="{{ url_for('remove_student', student_id=student.id) }}" class="inline-block" onsubmit="return confirm('Are you sure you want to remove this student?');">
-                                    <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                        </svg>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
-                <p class="text-gray-600 dark:text-gray-400">No students registered yet.</p>
-                <button onclick="document.getElementById('addStudentModal').classList.remove('hidden')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">Add Your First Student</button>
             </div>
         {% endif %}
     </div>

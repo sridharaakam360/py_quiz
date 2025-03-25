@@ -1,6 +1,7 @@
 /**
  * Pharmacy Exam Prep - Main script file
  * Contains all the frontend functionality for the application
+ * Improved version with CSRF token handling and session management
  */
 
 // Initialize on document load
@@ -125,7 +126,31 @@ function setupQuizTimer() {
  */
 function setupFormAnimations() {
     document.querySelectorAll('form').forEach(form => {
-        form.addEventListener('submit', () => {
+        form.addEventListener('submit', (e) => {
+            // Ensure form has CSRF token before submission
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                e.preventDefault();
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                if (csrfToken) {
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrf_token';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+                    
+                    // Log token for debugging (remove in production)
+                    console.log('Added missing CSRF token to form:', csrfToken);
+                    
+                    // Continue with form submission
+                    form.submit();
+                } else {
+                    console.error('CSRF token not found in meta tag');
+                    // Show error message to user
+                    showFlashMessage('CSRF token missing. Please refresh the page and try again.', 'danger');
+                }
+                return;
+            }
+            
             form.classList.add('animate-scale-up');
             setTimeout(() => form.classList.remove('animate-scale-up'), 300);
         });
@@ -140,6 +165,29 @@ function setupFormAnimations() {
             });
         });
     });
+}
+
+/**
+ * Show a flash message programmatically
+ */
+function showFlashMessage(message, category = 'info') {
+    const flashContainer = document.querySelector('.flash-messages');
+    if (!flashContainer) return;
+    
+    const flash = document.createElement('div');
+    flash.classList.add('flash', category, 'animate-slide-down');
+    flash.innerHTML = `
+        ${message}
+        <button class="close-flash" onclick="this.parentElement.style.display='none';">&times;</button>
+    `;
+    
+    flashContainer.appendChild(flash);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        flash.style.opacity = '0';
+        setTimeout(() => flash.remove(), 500);
+    }, 5000);
 }
 
 /**
@@ -288,7 +336,7 @@ function enhanceResultsPage() {
 }
 
 /**
- * Set up dropdown menus
+ * Set up dropdown menus with improved event handling
  */
 function setupDropdowns() {
     document.querySelectorAll('.dropdown').forEach(dropdown => {
@@ -297,15 +345,25 @@ function setupDropdowns() {
         
         if (!button || !menu) return;
         
-        button.addEventListener('click', (e) => {
+        // Clean up any existing event listeners (to prevent duplicates)
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        newButton.addEventListener('click', (e) => {
             e.stopPropagation();
             menu.classList.toggle('hidden');
         });
         
         // Close dropdown when clicking outside
-        document.addEventListener('click', () => {
-            menu.classList.add('hidden');
-        });
+        const closeDropdown = (event) => {
+            if (!dropdown.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        };
+        
+        // Remove existing listeners to prevent duplicates
+        document.removeEventListener('click', closeDropdown);
+        document.addEventListener('click', closeDropdown);
         
         // Prevent clicks inside dropdown from closing it
         menu.addEventListener('click', (e) => {
@@ -338,22 +396,32 @@ function setupFlashMessages() {
 
 /**
  * Add CSRF protection to all forms
+ * Improved to handle token refreshing and debug issues
  */
 function setupCSRFProtection() {
     // Get CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
     
     if (csrfToken) {
+        console.log('CSRF token found:', csrfToken.substring(0, 10) + '...');
+        
         // Add token to all forms
         document.querySelectorAll('form').forEach(form => {
             // Skip if form already has CSRF token
-            if (form.querySelector('input[name="csrf_token"]')) return;
+            let existingToken = form.querySelector('input[name="csrf_token"]');
             
-            const csrfInput = document.createElement('input');
-            csrfInput.type = 'hidden';
-            csrfInput.name = 'csrf_token';
-            csrfInput.value = csrfToken;
-            form.appendChild(csrfInput);
+            if (existingToken) {
+                console.log('Form already has CSRF token:', existingToken.value.substring(0, 10) + '...');
+                // Update token value to ensure it's current
+                existingToken.value = csrfToken;
+            } else {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                console.log('Added CSRF token to form');
+            }
         });
         
         // Add token to AJAX requests
@@ -362,6 +430,17 @@ function setupCSRFProtection() {
             originalXhrOpen.apply(this, arguments);
             this.setRequestHeader('X-CSRF-Token', csrfToken);
         };
+        
+        // Also handle fetch API
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            options = options || {};
+            options.headers = options.headers || {};
+            options.headers['X-CSRF-Token'] = csrfToken;
+            return originalFetch(url, options);
+        };
+    } else {
+        console.warn('CSRF token not found in meta tag. CSRF protection disabled.');
     }
 }
 
@@ -618,6 +697,37 @@ function makeTablesResponsive() {
         }
     });
 }
+
+/**
+ * Session check and refresh functionality
+ * Fixes redirect loops by refreshing expired sessions
+ */
+function checkSession() {
+    // Ping the server every 5 minutes to keep the session alive
+    setInterval(() => {
+        fetch('/ping', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.authenticated) {
+                console.warn('Session expired, redirecting to login');
+                window.location.href = '/choose_login';
+            }
+        })
+        .catch(error => {
+            console.error('Session check failed:', error);
+        });
+    }, 300000); // 5 minutes
+}
+
+// Initialize session checking
+checkSession();
 
 /**
  * Globally accessible export functions that can be called from any page
