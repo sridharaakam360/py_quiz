@@ -556,8 +556,8 @@ def institution_dashboard():
                       (institution_id, datetime.now() - timedelta(days=30)))
         active_students = cursor.fetchone()['count']
         
-        # Get recent results (example definition - modify as needed)
-        cursor.execute('''SELECT r.* 
+        # Get recent results with username joined
+        cursor.execute('''SELECT r.*, u.username 
                          FROM results r 
                          JOIN users u ON r.user_id = u.id 
                          WHERE u.institution_id = %s 
@@ -566,22 +566,44 @@ def institution_dashboard():
                       (institution_id,))
         recent_results = cursor.fetchall()
         
-        # Get student performance (example definition - modify as needed)
-        cursor.execute('''SELECT AVG(score) as avg_score 
+        # Get student performance
+        cursor.execute('''SELECT AVG(r.score / r.total_questions * 100) as avg_score 
                          FROM results r 
                          JOIN users u ON r.user_id = u.id 
                          WHERE u.institution_id = %s''', 
                       (institution_id,))
-        student_performance = cursor.fetchone()['avg_score'] or 0
+        avg_score_result = cursor.fetchone()
+        student_performance = avg_score_result['avg_score'] if avg_score_result and avg_score_result['avg_score'] is not None else 0
         
-        # Get students list
-        cursor.execute('''SELECT * 
-                         FROM users 
-                         WHERE institution_id = %s 
-                         AND user_type = "institution_student" 
-                         ORDER BY username''', 
+        # Get students list with additional metrics
+        cursor.execute('''SELECT u.*, 
+                           COUNT(DISTINCT r.id) as quiz_count,
+                           AVG(r.score / r.total_questions * 100) as avg_score,
+                           MAX(r.date_taken) as last_quiz_date
+                         FROM users u 
+                         LEFT JOIN results r ON u.id = r.user_id
+                         WHERE u.institution_id = %s 
+                         AND u.user_type = "institution_student" 
+                         GROUP BY u.id
+                         ORDER BY u.username''', 
                       (institution_id,))
         students = cursor.fetchall()
+        
+        # Format data for display
+        for student in students:
+            student['avg_score'] = round(student['avg_score'], 1) if student['avg_score'] is not None else 0
+            if student['last_active']:
+                diff = datetime.now() - student['last_active']
+                if diff.days > 0:
+                    student['last_active_str'] = f"{diff.days} days ago"
+                elif diff.seconds >= 3600:
+                    student['last_active_str'] = f"{diff.seconds // 3600} hours ago"
+                elif diff.seconds >= 60:
+                    student['last_active_str'] = f"{diff.seconds // 60} minutes ago"
+                else:
+                    student['last_active_str'] = "Just now"
+            else:
+                student['last_active_str'] = "Never"
         
     except mysql.connector.Error as err:
         logger.error(f"Database error in institution dashboard: {str(err)}")
@@ -1616,6 +1638,75 @@ def edit_user(user_id):
         conn.close()
     
     return render_template('edit_user.html', form=form, user_id=user_id)
+
+@app.route('/edit_student', methods=['POST'])
+@institute_admin_required
+def edit_student():
+    student_id = request.form.get('student_id', type=int)
+    username = sanitize_input(request.form.get('username'))
+    email = sanitize_input(request.form.get('email'))
+    status = sanitize_input(request.form.get('status'))
+    password = request.form.get('password')
+    
+    if not student_id:
+        flash('Student ID is required.', 'danger')
+        return redirect(url_for('institution_dashboard'))
+    
+    institution_id = session.get('institution_id')
+    
+    conn = get_db_connection()
+    if conn is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('institution_dashboard'))
+        
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Verify student belongs to this institution
+        cursor.execute('''SELECT * FROM users 
+            WHERE id = %s AND institution_id = %s AND user_type = "institution_student"''',
+            (student_id, institution_id))
+        student = cursor.fetchone()
+        
+        if not student:
+            flash('Student not found or does not belong to your institution.', 'danger')
+            return redirect(url_for('institution_dashboard'))
+        
+        # Check if username already exists (excluding current student)
+        if username != student['username']:
+            cursor.execute('SELECT id FROM users WHERE username = %s AND id != %s', (username, student_id))
+            if cursor.fetchone():
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return redirect(url_for('institution_dashboard'))
+        
+        # Update student information
+        if password:
+            # Update with new password
+            hashed_password = generate_password_hash(password)
+            cursor.execute('''UPDATE users 
+                SET username = %s, email = %s, status = %s, password = %s, last_active = %s
+                WHERE id = %s''',
+                (username, email, status, hashed_password, datetime.now(), student_id))
+        else:
+            # Update without changing password
+            cursor.execute('''UPDATE users 
+                SET username = %s, email = %s, status = %s, last_active = %s
+                WHERE id = %s''',
+                (username, email, status, datetime.now(), student_id))
+        
+        conn.commit()
+        flash(f'Student {username} updated successfully.', 'success')
+        logger.info(f"Student {student_id} updated by institute_admin {session['username']}")
+        
+    except mysql.connector.Error as err:
+        conn.rollback()
+        logger.error(f"Database error updating student: {str(err)}")
+        flash('Error updating student information.', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return redirect(url_for('institution_dashboard'))
 
 @app.route('/manage_users')
 @super_admin_required

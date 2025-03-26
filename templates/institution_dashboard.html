@@ -76,160 +76,179 @@
         </div>
     </div>
     
-    <!-- Student Management -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Student Management</h3>
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{ student_count }} / {{ institution.user_limit }} students</span>
-        </div>
-        
-        {% if students %}
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Username</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Email</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Status</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Last Active</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Quizzes</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Avg. Score</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for student in students %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.username }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.email }}</td>
-                            <td class="py-3 px-4">
-                                <span class="px-2 py-1 rounded-full text-xs font-medium
-                                    {% if student.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                    {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                                    {{ student.status|capitalize }}
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.last_active_str }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.quiz_count }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.avg_score }}%</td>
-                            <td class="py-3 px-4">
-                                <form method="POST" action="{{ url_for('remove_student', student_id=student.id) }}" class="inline-block" onsubmit="return confirm('Are you sure you want to remove this student?');">
-                                    <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                        </svg>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
-                <p class="text-gray-600 dark:text-gray-400">No students registered yet.</p>
-                <button onclick="document.getElementById('addStudentModal').classList.remove('hidden')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">Add Your First Student</button>
-            </div>
-        {% endif %}
+<!-- Student Management -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Student Management</h3>
+        <span class="text-sm text-gray-600 dark:text-gray-400">{{ student_count }} / {{ institution.user_limit }} students</span>
     </div>
-
-    <!-- Student Performance -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
-        <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Student Performance</h3>
-        
-        {% if student_performance %}
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Student</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Average Score</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Quizzes Taken</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for student in student_performance %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200 animate-slide-up">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.username }}</td>
-                            <td class="py-3 px-4">
+    
+    {% if students %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
+                <thead class="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Username</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Email</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Status</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Last Active</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Quizzes</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Avg. Score</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for student in students %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200">
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.username }}</td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.email }}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium
+                                {% if student.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                {{ student.status|capitalize }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.last_active_str }}</td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.quiz_count if student.quiz_count is not none else 0 }}</td>
+                        <td class="py-3 px-4">
+                            {% if student.avg_score and student.avg_score > 0 %}
                                 <div class="flex items-center">
                                     <span class="mr-2 font-medium 
                                         {% if student.avg_score >= 80 %}text-green-600 dark:text-green-400
                                         {% elif student.avg_score >= 60 %}text-yellow-600 dark:text-yellow-400
-                                        {% elif student.avg_score > 0 %}text-red-600 dark:text-red-400
-                                        {% else %}text-gray-500 dark:text-gray-400{% endif %}">
-                                        {{ student.avg_score if student.avg_score > 0 else 'N/A' }}{% if student.avg_score > 0 %}%{% endif %}
+                                        {% else %}text-red-600 dark:text-red-400{% endif %}">
+                                        {{ student.avg_score|round(1) }}%
                                     </span>
-                                    {% if student.avg_score > 0 %}
-                                    <div class="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
-                                        <div class="h-2.5 rounded-full
+                                    <div class="w-16 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                        <div class="h-2 rounded-full
                                             {% if student.avg_score >= 80 %}bg-green-500
                                             {% elif student.avg_score >= 60 %}bg-yellow-500
                                             {% else %}bg-red-500{% endif %}"
                                             style="width: {{ student.avg_score }}%">
                                         </div>
                                     </div>
-                                    {% endif %}
                                 </div>
-                            </td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ student.quiz_count }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            {% else %}
+                                <span class="text-gray-500 dark:text-gray-400">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 flex space-x-2">
+                            <!-- Edit Student Button -->
+                            <button onclick="openEditStudentModal({{ student.id }}, '{{ student.username }}', '{{ student.email }}', '{{ student.status }}')" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                </svg>
+                            </button>
+                            
+                            <!-- Delete Student Form -->
+                            <form method="POST" action="{{ url_for('remove_student', student_id=student.id) }}" class="inline-block" onsubmit="return confirm('Are you sure you want to remove this student?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
+            <p class="text-gray-600 dark:text-gray-400">No students registered yet.</p>
+            <button onclick="document.getElementById('addStudentModal').classList.remove('hidden')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">Add Your First Student</button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Edit Student Modal -->
+<div id="editStudentModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 animate-scale-up">
+        <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Edit Student</h3>
+            <button onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <form id="editStudentForm" action="{{ url_for('edit_student') }}" method="POST" class="p-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="edit_student_id" name="student_id" value="">
+            <div class="space-y-4">
+                <div>
+                    <label for="edit_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                    <input type="text" name="username" id="edit_username" required class="mt-1 block w-full rounded-md dark:bg-gray-700">
+                </div>
+                <div>
+                    <label for="edit_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                    <input type="email" name="email" id="edit_email" required class="mt-1 block w-full rounded-md dark:bg-gray-700">
+                </div>
+                <div>
+                    <label for="edit_status" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                    <select name="status" id="edit_status" class="mt-1 block w-full rounded-md dark:bg-gray-700">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="edit_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password (leave blank to keep unchanged)</label>
+                    <input type="password" name="password" id="edit_password" class="mt-1 block w-full rounded-md dark:bg-gray-700">
+                </div>
             </div>
-        {% else %}
-            <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
-                <p class="text-gray-600 dark:text-gray-400">No student performance data available yet.</p>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button type="button" onclick="document.getElementById('editStudentModal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Update Student</button>
             </div>
-        {% endif %}
-    </div>
-    
-    <!-- Recent Activities -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
-        <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Recent Quiz Results</h3>
-        
-        {% if recent_results %}
-            <div class="overflow-x-auto">
-                <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Student</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Score</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Percentage</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Time Taken</th>
-                            <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for result in recent_results %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200 animate-slide-up">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.username }}</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.score }} / {{ result.total_questions }}</td>
-                            <td class="py-3 px-4">
-                                {% set percentage = (result.score / result.total_questions * 100) | round(1) %}
-                                <span class="px-2 py-1 rounded-full text-xs font-medium
-                                    {% if percentage >= 80 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                    {% elif percentage >= 60 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
-                                    {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                                    {{ percentage }}%
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.time_taken // 60 }}m {{ result.time_taken % 60 }}s</td>
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.date_taken.strftime('%b %d, %H:%M') }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
-                <p class="text-gray-600 dark:text-gray-400">No quiz results available yet.</p>
-            </div>
-        {% endif %}
+        </form>
     </div>
 </div>
+
+<!-- Recent Activities -->
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 animate-fade-in">
+    <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Recent Quiz Results</h3>
+    
+    {% if recent_results %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
+                <thead class="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Student</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Score</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Percentage</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Time Taken</th>
+                        <th class="py-3 px-4 text-left font-semibold text-gray-700 dark:text-gray-300">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for result in recent_results %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200 animate-slide-up">
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.username }}</td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.score }} / {{ result.total_questions }}</td>
+                        <td class="py-3 px-4">
+                            {% set percentage = (result.score / result.total_questions * 100) | round(1) if result.total_questions > 0 else 0 %}
+                            <span class="px-2 py-1 rounded-full text-xs font-medium
+                                {% if percentage >= 80 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% elif percentage >= 60 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                {{ percentage }}%
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.time_taken // 60 }}m {{ result.time_taken % 60 }}s</td>
+                        <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ result.date_taken.strftime('%b %d, %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="bg-gray-50 dark:bg-gray-700 p-6 text-center rounded-lg">
+            <p class="text-gray-600 dark:text-gray-400">No quiz results available yet.</p>
+        </div>
+    {% endif %}
 
 <!-- Add Student Modal -->
 <div id="addStudentModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
@@ -267,21 +286,53 @@
 </div>
 
 <script>
-    // Dropdown functionality
+    // Function to open the edit student modal and populate it with student data
+    function openEditStudentModal(studentId, username, email, status) {
+        // Set the values in the form
+        document.getElementById('edit_student_id').value = studentId;
+        document.getElementById('edit_username').value = username;
+        document.getElementById('edit_email').value = email;
+        document.getElementById('edit_status').value = status;
+        
+        // Clear password field
+        document.getElementById('edit_password').value = '';
+        
+        // Show the modal
+        document.getElementById('editStudentModal').classList.remove('hidden');
+    }
+
+    // Add event listeners when the DOM is loaded
     document.addEventListener('DOMContentLoaded', function() {
+        // Close modals when clicking outside
+        window.addEventListener('click', function(event) {
+            const editModal = document.getElementById('editStudentModal');
+            const addModal = document.getElementById('addStudentModal');
+            
+            if (event.target === editModal) {
+                editModal.classList.add('hidden');
+            }
+            
+            if (event.target === addModal) {
+                addModal.classList.add('hidden');
+            }
+        });
+        
+        // Setup dropdown functionality
         const dropdownButton = document.querySelector('.dropdown button');
         const dropdownMenu = document.querySelector('.dropdown-menu');
         
-        dropdownButton.addEventListener('click', function() {
-            dropdownMenu.classList.toggle('hidden');
-        });
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.dropdown')) {
-                dropdownMenu.classList.add('hidden');
-            }
-        });
+        if (dropdownButton && dropdownMenu) {
+            dropdownButton.addEventListener('click', function() {
+                dropdownMenu.classList.toggle('hidden');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('.dropdown')) {
+                    dropdownMenu.classList.add('hidden');
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
