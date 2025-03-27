@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6 animate-fade-in">
     <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Manage Questions</h2>
@@ -9,19 +8,19 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exam</label>
-                <select name="exam_name" class="w-full dark:bg-gray-700 rounded">
+                <select name="exam_id" class="w-full dark:bg-gray-700 rounded">
                     <option value="">All Exams</option>
-                    {% for exam in exam_names %}
-                    <option value="{{ exam }}" {% if filters.exam_name == exam %}selected{% endif %}>{{ exam }}</option>
+                    {% for exam in exams %}
+                    <option value="{{ exam.id }}" {% if filters.exam_id == exam.id %}selected{% endif %}>{{ exam.name }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                <select name="subject" class="w-full dark:bg-gray-700 rounded">
+                <select name="subject_id" class="w-full dark:bg-gray-700 rounded">
                     <option value="">All Subjects</option>
                     {% for subject in subjects %}
-                    <option value="{{ subject }}" {% if filters.subject == subject %}selected{% endif %}>{{ subject }}</option>
+                    <option value="{{ subject.id }}" {% if filters.subject_id == subject.id %}selected{% endif %}>{{ subject.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -30,13 +29,8 @@
                 <input type="text" name="topics" placeholder="Topics (comma-separated)" value="{{ filters.topics or '' }}" class="w-full dark:bg-gray-700 rounded">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
-                <select name="year" class="w-full dark:bg-gray-700 rounded">
-                    <option value="">All Years</option>
-                    {% for year in years %}
-                    <option value="{{ year }}" {% if filters.year == year %}selected{% endif %}>{{ year }}</option>
-                    {% endfor %}
-                </select>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Previous Year</label>
+                <input type="number" name="previous_year" placeholder="e.g., 2023" value="{{ filters.previous_year or '' }}" class="w-full dark:bg-gray-700 rounded">
             </div>
         </div>
         <div class="mt-4 flex justify-end">
@@ -58,7 +52,7 @@
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Question</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Exam</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Subject</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Year</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Previous Year</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Difficulty</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Created By</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
@@ -69,9 +63,9 @@
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors duration-200">
                         <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.id }}</td>
                         <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate" title="{{ q.question }}">{{ q.question }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.exam_name }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.subject }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.year }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.exam_name or 'N/A' }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.subject_name }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.previous_year or 'N/A' }}</td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                 {% if q.difficulty == 'easy' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
@@ -80,7 +74,7 @@
                                 {{ q.difficulty|capitalize }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.username }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ q.username or 'Unknown' }}</td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                             <div class="flex space-x-2">
                                 <a href="{{ url_for('edit_question', question_id=q.id) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-100 dark:bg-indigo-900 p-1 rounded">
@@ -107,78 +101,104 @@
     <div class="mt-8">
         <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Add New Question</h3>
         <form method="POST" class="question-form space-y-5 bg-gray-50 dark:bg-gray-750 p-6 rounded-lg shadow">
+            {{ form.hidden_tag() }}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Question</label>
-                <textarea name="question" placeholder="Enter the question" required class="w-full dark:bg-gray-700 rounded resize-none h-24"></textarea>
+                {{ form.question(class="w-full dark:bg-gray-700 rounded resize-none h-24", placeholder="Enter the question") }}
+                {% if form.question.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.question.errors[0] }}</p>
+                {% endif %}
             </div>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Option A</label>
-                    <input type="text" name="option_a" placeholder="Option A" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.option_a(class="w-full dark:bg-gray-700 rounded", placeholder="Option A") }}
+                    {% if form.option_a.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.option_a.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Option B</label>
-                    <input type="text" name="option_b" placeholder="Option B" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.option_b(class="w-full dark:bg-gray-700 rounded", placeholder="Option B") }}
+                    {% if form.option_b.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.option_b.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Option C</label>
-                    <input type="text" name="option_c" placeholder="Option C" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.option_c(class="w-full dark:bg-gray-700 rounded", placeholder="Option C") }}
+                    {% if form.option_c.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.option_c.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Option D</label>
-                    <input type="text" name="option_d" placeholder="Option D" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.option_d(class="w-full dark:bg-gray-700 rounded", placeholder="Option D") }}
+                    {% if form.option_d.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.option_d.errors[0] }}</p>
+                    {% endif %}
                 </div>
             </div>
-            
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Correct Answer</label>
-                    <select name="correct_answer" required class="w-full dark:bg-gray-700 rounded">
-                        <option value="a">A</option>
-                        <option value="b">B</option>
-                        <option value="c">C</option>
-                        <option value="d">D</option>
-                    </select>
+                    {{ form.correct_answer(class="w-full dark:bg-gray-700 rounded") }}
+                    {% if form.correct_answer.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.correct_answer.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-                    <input type="text" name="category" placeholder="Category (e.g., Pharmacology)" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.category(class="w-full dark:bg-gray-700 rounded", placeholder="e.g., Pharmacology") }}
+                    {% if form.category.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.category.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Difficulty</label>
-                    <select name="difficulty" required class="w-full dark:bg-gray-700 rounded">
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
-                    <input type="number" name="year" placeholder="Year (e.g., 2023)" required class="w-full dark:bg-gray-700 rounded">
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exam Name</label>
-                    <input type="text" name="exam_name" placeholder="Exam Name (e.g., NAPLEX)" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.difficulty(class="w-full dark:bg-gray-700 rounded") }}
+                    {% if form.difficulty.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.difficulty.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
-                    <input type="text" name="subject" placeholder="Subject (e.g., Pharmacy Law)" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.subject_id(class="w-full dark:bg-gray-700 rounded") }}
+                    {% if form.subject_id.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.subject_id.errors[0] }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Previous Year</label>
+                    {{ form.previous_year(class="w-full dark:bg-gray-700 rounded", placeholder="e.g., 2023") }}
+                    {% if form.previous_year.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.previous_year.errors[0] }}</p>
+                    {% endif %}
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Topics</label>
-                    <input type="text" name="topics" placeholder="Topics (comma-separated)" required class="w-full dark:bg-gray-700 rounded">
+                    {{ form.topics(class="w-full dark:bg-gray-700 rounded", placeholder="Topics (comma-separated)") }}
+                    {% if form.topics.errors %}
+                        <p class="text-red-500 text-xs italic">{{ form.topics.errors[0] }}</p>
+                    {% endif %}
                 </div>
             </div>
-            
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Explanation</label>
-                <textarea name="explanation" placeholder="Explanation for the correct answer" required class="w-full dark:bg-gray-700 rounded resize-none h-24"></textarea>
+                {{ form.explanation(class="w-full dark:bg-gray-700 rounded resize-none h-24", placeholder="Explanation for the correct answer") }}
+                {% if form.explanation.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.explanation.errors[0] }}</p>
+                {% endif %}
             </div>
-            
+            <div class="flex items-center">
+                {{ form.is_previous_year(class="mr-2 dark:bg-gray-700") }}
+                <label for="{{ form.is_previous_year.id }}" class="text-sm font-medium text-gray-700 dark:text-gray-300">Mark as Previous Year Question</label>
+                {% if form.is_previous_year.errors %}
+                    <p class="text-red-500 text-xs italic">{{ form.is_previous_year.errors[0] }}</p>
+                {% endif %}
+            </div>
             <div>
                 <button type="submit" class="btn w-full flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">

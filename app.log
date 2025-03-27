@@ -1,0 +1,4 @@
+2025-03-27 20:27:47,534 - flask-limiter - INFO - ratelimit 50 per 1 hour (127.0.0.1) exceeded at endpoint: institution_register
+2025-03-27 20:27:47,534 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2025 20:27:47] "[31m[1mGET /institution_register HTTP/1.1[0m" 429 -
+2025-03-27 20:31:12,983 - flask-limiter - INFO - ratelimit 50 per 1 hour (127.0.0.1) exceeded at endpoint: institution_register
+2025-03-27 20:31:12,987 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2025 20:31:12] "[31m[1mGET /institution_register HTTP/1.1[0m" 429 -

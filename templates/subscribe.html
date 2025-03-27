@@ -1,55 +1,48 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="max-w-2xl mx-auto">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded {% if category == 'danger' %}bg-red-100 text-red-700{% elif category == 'success' %}bg-green-100 text-green-700{% elif category == 'warning' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6 animate-fade-in">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Subscribe to {{ plan.name }}</h2>
-        
+
         <div class="mb-8 p-4 bg-indigo-50 dark:bg-indigo-900 rounded-lg">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold text-indigo-800 dark:text-indigo-200">Plan Details</h3>
                 <span class="text-xl font-bold text-indigo-600 dark:text-indigo-400">${{ "%.2f"|format(plan.price) }}</span>
             </div>
-            
             <p class="text-gray-700 dark:text-gray-300 mb-4">{{ plan.description }}</p>
-            
             <div class="mt-4">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider mb-2">Included Exams:</h4>
                 <ul class="grid grid-cols-2 gap-2">
                     {% for exam in plan.exams %}
-                    <li class="flex items-center">
-                        <svg class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                        </svg>
-                        <span class="text-gray-700 dark:text-gray-300">{{ exam }}</span>
-                    </li>
+                        <li class="flex items-center">
+                            <svg class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="text-gray-700 dark:text-gray-300">{{ exam }}</span>
+                        </li>
                     {% endfor %}
                 </ul>
             </div>
-            
             <div class="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                <p>Duration: {{ plan.duration_days // 30 }} month</p>
+                <p>Duration: {{ plan.duration_days }} days</p>
                 <p>Subscription will begin immediately upon payment.</p>
             </div>
         </div>
-        
+
         <form method="POST" class="space-y-6">
             {{ form.hidden_tag() }}
-            
+            {{ form.plan_id(type="hidden", value=plan.id) }}
             <div class="space-y-4">
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Confirm Plan</h3>
-                    <div class="bg-gray-50 dark:bg-gray-750 rounded-md p-3">
-                        {% for subfield in form.plan_id %}
-                            <div class="flex items-center mb-2">
-                                {{ subfield(class="mr-3") }}
-                                {{ subfield.label(class="flex-grow font-medium text-gray-700 dark:text-gray-300") }}
-                                <span class="ml-auto font-bold text-gray-900 dark:text-white">${{ "%.2f"|format(plan.price) }}</span>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                
                 <div>
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">Payment Method</h3>
                     <div class="bg-gray-50 dark:bg-gray-750 rounded-md p-3">
@@ -59,18 +52,13 @@
                         {% endif %}
                     </div>
                 </div>
-                
                 <div class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900 rounded-md">
                     <div class="flex items-start">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
+                        <svg class="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
                         <div class="ml-3">
-                            <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                Important Information
-                            </h3>
+                            <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Important Information</h3>
                             <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                                 <p>This is a demo subscription. No actual payment will be processed.</p>
                                 <p>In a production environment, this would connect to a payment processor.</p>
@@ -78,13 +66,12 @@
                         </div>
                     </div>
                 </div>
-                
                 <div class="mt-8">
                     {{ form.submit(class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transform transition-all duration-300 hover:scale-105") }}
                 </div>
             </div>
         </form>
-        
+
         <div class="mt-6 text-center">
             <a href="{{ url_for('subscriptions') }}" class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
                 &larr; Back to Subscription Plans

@@ -32,43 +32,45 @@
             
             <div class="hidden md:flex space-x-4 text-sm">
                 {% if session.username %}
-                    {% if session.role == 'super_admin' %}
+                    {% if session.role == 'superadmin' %}
                         <a href="{{ url_for('admin_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('admin_dashboard') %}bg-blue-500{% endif %}">Admin Dashboard</a>
                         <a href="{{ url_for('manage_questions') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('manage_questions') %}bg-blue-500{% endif %}">Manage Questions</a>
                         <a href="{{ url_for('manage_users') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('manage_users') %}bg-blue-500{% endif %}">Manage Users</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
-                    {% elif session.role == 'institute_admin' %}
+                    {% elif session.role == 'instituteadmin' %}
                         <a href="{{ url_for('institution_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('institution_dashboard') %}bg-blue-500{% endif %}">Institute Dashboard</a>
-                        <a href="{{ url_for('add_student') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('add_student') %}bg-blue-500{% endif %}">Manage Students</a>
+                        <a href="{{ url_for('manage_users', type='instituteadmin', parent_id=session.institution_id) }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors">Manage Students</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
-                    {% elif session.role == 'individual_user' %}
+                    {% elif session.role == 'individual' %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('user_dashboard') %}bg-blue-500{% endif %}">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
                         <a href="{{ url_for('subscriptions') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('subscriptions') %}bg-blue-500{% endif %}">Subscriptions</a>
-                    {% elif session.role == 'student_user' %}
+                        <a href="{{ url_for('subscription_history') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('subscription_history') %}bg-blue-500{% endif %}">Subscription History</a>
+                    {% elif session.role == 'student' %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('user_dashboard') %}bg-blue-500{% endif %}">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('quiz') %}bg-blue-500{% endif %}">Take Quiz</a>
-                        {% if session.institution_name %}
-                            <span class="px-3 py-2 text-blue-200">{{ session.institution_name }}</span>
+                        {% if session.institution_id %}
+                            <span class="px-3 py-2 text-blue-200">{{ institution_name or 'Institution' }}</span>
                         {% endif %}
                     {% endif %}
                 {% else %}
                     <a href="{{ url_for('choose_login') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('choose_login') %}bg-blue-500{% endif %}">Login</a>
                     <a href="{{ url_for('register') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('register') %}bg-blue-500{% endif %}">Register</a>
-                    <a href="{{ url_for('register_institution') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('register_institution') %}bg-blue-500{% endif %}">Register Institution</a>
+                    <a href="{{ url_for('institution_register') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('institution_register') %}bg-blue-500{% endif %}">Register Institution</a>
+                    <a href="{{ url_for('student_register') }}" class="px-3 py-2 rounded-lg hover:bg-blue-500 transition-colors {% if request.path == url_for('student_register') %}bg-blue-500{% endif %}">Register Student</a>
                 {% endif %}
             </div>
             
             <div class="flex items-center space-x-4">
                 {% if session.username %}
                     <div class="hidden md:flex items-center gap-2">
-                        {% if session.role == 'super_admin' %}
+                        {% if session.role == 'superadmin' %}
                             <span class="px-2 py-1 bg-red-700 rounded-md text-xs text-white">Super Admin</span>
-                        {% elif session.role == 'institute_admin' %}
+                        {% elif session.role == 'instituteadmin' %}
                             <span class="px-2 py-1 bg-indigo-700 rounded-md text-xs text-white">Institute Admin</span>
-                        {% elif session.role == 'individual_user' %}
+                        {% elif session.role == 'individual' %}
                             <span class="px-2 py-1 bg-blue-700 rounded-md text-xs text-white">Individual</span>
-                        {% elif session.role == 'student_user' %}
+                        {% elif session.role == 'student' %}
                             <span class="px-2 py-1 bg-green-700 rounded-md text-xs text-white">Student</span>
                         {% endif %}
                         <span class="hidden md:inline-block">{{ session.username }}</span>
@@ -84,10 +86,9 @@
                             </svg>
                         </button>
                         <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 dropdown-menu hidden">
-                            <a href="{{ url_for('register') }}" class="block px-4 py-2 text-sm text-gray-7
-00 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Individual User</a>
-                            <a href="{{ url_for('register_institution') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Institution</a>
-                            <a href="{{ url_for('register_student') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Student</a>
+                            <a href="{{ url_for('register') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Individual User</a>
+                            <a href="{{ url_for('institution_register') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Institution</a>
+                            <a href="{{ url_for('student_register') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Student</a>
                         </div>
                     </div>
                 {% endif %}
@@ -99,26 +100,29 @@
         <div class="container mx-auto p-2">
             <div class="flex justify-center space-x-3 text-sm overflow-x-auto">
                 {% if session.username %}
-                    {% if session.role == 'super_admin' %}
+                    {% if session.role == 'superadmin' %}
                         <a href="{{ url_for('admin_dashboard') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Admin</a>
                         <a href="{{ url_for('manage_questions') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Questions</a>
                         <a href="{{ url_for('manage_users') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Users</a>
                         <a href="{{ url_for('quiz') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Quiz</a>
-                    {% elif session.role == 'institute_admin' %}
+                    {% elif session.role == 'instituteadmin' %}
                         <a href="{{ url_for('institution_dashboard') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Dashboard</a>
-                        <a href="{{ url_for('add_student') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Students</a>
+                        <a href="{{ url_for('manage_users', type='instituteadmin', parent_id=session.institution_id) }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Students</a>
                         <a href="{{ url_for('quiz') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Quiz</a>
-                    {% elif session.role in ['individual_user', 'student_user'] %}
+                    {% elif session.role == 'individual' %}
                         <a href="{{ url_for('user_dashboard') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Dashboard</a>
                         <a href="{{ url_for('quiz') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Quiz</a>
-                        {% if session.role == 'individual_user' %}
-                            <a href="{{ url_for('subscriptions') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Subscriptions</a>
-                        {% endif %}
+                        <a href="{{ url_for('subscriptions') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Subscriptions</a>
+                        <a href="{{ url_for('subscription_history') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Sub History</a>
+                    {% elif session.role == 'student' %}
+                        <a href="{{ url_for('user_dashboard') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Dashboard</a>
+                        <a href="{{ url_for('quiz') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Quiz</a>
                     {% endif %}
                 {% else %}
                     <a href="{{ url_for('choose_login') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Login</a>
                     <a href="{{ url_for('register') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Register</a>
-                    <a href="{{ url_for('register_institution') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Register Inst.</a>
+                    <a href="{{ url_for('institution_register') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Reg Inst</a>
+                    <a href="{{ url_for('student_register') }}" class="px-2 py-1 hover:bg-blue-600 rounded transition-colors whitespace-nowrap">Reg Student</a>
                 {% endif %}
             </div>
         </div>
@@ -134,12 +138,12 @@
     </form>
     {% endif %}
 
-    <!-- Add session status indicator for debugging (only visible to admins) -->
-    {% if session.role == 'super_admin' %}
+    <!-- Add session status indicator for debugging (visible to superadmins) -->
+    {% if session.role == 'superadmin' %}
     <div class="hidden md:block fixed bottom-0 right-0 bg-gray-800 text-white text-xs p-1 opacity-50 hover:opacity-100">
         Session: {{ session.username }} ({{ session.role }})
         {% if session.institution_id %}
-        | Inst: {{ session.institution_name }}
+        | Inst ID: {{ session.institution_id }}
         {% endif %}
     </div>
     {% endif %}
@@ -150,7 +154,7 @@
                 {% for category, message in messages %}
                     <div class="flash {{ category if category else 'info' }} animate-slide-down" role="alert">
                         {{ message }}
-                        <button class="close-flash" onclick="this.parentElement.style.display='none';">&times;</button>
+                        <button class="close-flash" onclick="this.parentElement.style.display='none';">×</button>
                     </div>
                 {% endfor %}
             {% endif %}
@@ -167,7 +171,7 @@
         <div class="container mx-auto px-4">
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <div class="mb-4 md:mb-0">
-                    <p class="text-sm">&copy; 2025 Pharmacy Exam Prep. All rights reserved.</p>
+                    <p class="text-sm">© 2025 Pharmacy Exam Prep. All rights reserved.</p>
                 </div>
                 <div class="flex space-x-4">
                     <a href="#" class="text-sm hover:text-white transition-colors">Terms of Service</a>
@@ -178,7 +182,7 @@
         </div>
     </footer>
     
-    <!-- Dark mode toggle -->
+    <!-- Dark mode toggle and CSRF validation -->
     <script>
         // Check for dark mode preference
         if (localStorage.getItem('darkMode') === 'true' || 
@@ -200,10 +204,24 @@
             // Check forms for CSRF tokens
             document.querySelectorAll('form').forEach(form => {
                 const csrfInput = form.querySelector('input[name="csrf_token"]');
-                if (!csrfInput) {
+                if (!csrfInput && form.method.toLowerCase() === 'post') {
                     console.warn('Form missing CSRF token:', form);
                 }
             });
+
+            // Dropdown menu functionality
+            const dropdown = document.querySelector('.dropdown');
+            const dropdownMenu = document.querySelector('.dropdown-menu');
+            if (dropdown && dropdownMenu) {
+                dropdown.addEventListener('click', function() {
+                    dropdownMenu.classList.toggle('hidden');
+                });
+                document.addEventListener('click', function(event) {
+                    if (!dropdown.contains(event.target)) {
+                        dropdownMenu.classList.add('hidden');
+                    }
+                });
+            }
         });
     </script>
 </body>
